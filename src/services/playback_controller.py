@@ -1,0 +1,262 @@
+import random
+import threading
+from datetime import datetime, timezone
+
+from utils.timestamps import utcnow_iso
+
+
+class PlaybackController:
+    def __init__(self, playback_repo, queue_repo, display_service):
+        self.playback_repo = playback_repo
+        self.queue_repo = queue_repo
+        self.display_service = display_service
+        self.lock = threading.RLock()
+        self.wake_event = threading.Event()
+        self.stop_event = threading.Event()
+        self.thread = None
+
+    def start(self):
+        if self.thread and self.thread.is_alive():
+            return
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.stop_event.set()
+        self.wake_event.set()
+        if self.thread:
+            self.thread.join(timeout=2)
+
+    def get_payload(self):
+        state = self.playback_repo.get_state()
+        return {
+            "settings": self.playback_repo.get_settings(),
+            "state": state,
+            "active_item": self.queue_repo.get_item(state["active_queue_item_id"]) if state.get("active_queue_item_id") else None,
+            "preview_item": self.queue_repo.get_item(state["preview_queue_item_id"]) if state.get("preview_queue_item_id") else None,
+        }
+
+    def update_settings(self, updates: dict):
+        normalized = {}
+        for key in ("default_timeout_seconds", "loop_enabled", "shuffle_enabled", "auto_advance_enabled", "queue_sort_mode"):
+            if key in updates:
+                normalized[key] = updates[key]
+        if "default_timeout_seconds" in normalized and int(normalized["default_timeout_seconds"]) <= 0:
+            raise ValueError("default_timeout_seconds must be positive")
+        for key in ("loop_enabled", "shuffle_enabled", "auto_advance_enabled"):
+            if key in normalized:
+                normalized[key] = int(bool(normalized[key]))
+        normalized["updated_at"] = utcnow_iso()
+        settings = self.playback_repo.update_settings(normalized)
+        self.wake_event.set()
+        return settings
+
+    def preview(self, queue_item_id=None, asset_id=None, direction=None):
+        with self.lock:
+            target = self._resolve_preview_target(queue_item_id=queue_item_id, asset_id=asset_id, direction=direction)
+            render_result = self.display_service.render_asset(
+                target["asset_id"],
+                fit_mode=target.get("fit_mode", "cover"),
+                background_mode=target.get("background_mode", "blur"),
+                background_color=target.get("background_color"),
+            )
+            state_updates = {
+                "preview_queue_item_id": target.get("queue_item_id"),
+                "preview_asset_id": target["asset_id"],
+                "mode": "preview",
+                "last_image_hash": render_result["image_hash"],
+                "last_rendered_at": utcnow_iso(),
+                "updated_at": utcnow_iso(),
+            }
+            state = self.playback_repo.update_state(state_updates)
+            self.wake_event.set()
+            return state
+
+    def apply_preview(self):
+        with self.lock:
+            state = self.playback_repo.get_state()
+            preview_asset_id = state.get("preview_asset_id")
+            if not preview_asset_id:
+                raise ValueError("No preview asset is active")
+            preview_queue_item_id = state.get("preview_queue_item_id")
+            timeout_seconds = self._resolve_timeout(preview_queue_item_id)
+            now = datetime.now(timezone.utc)
+            applied = self.playback_repo.update_state(
+                {
+                    "active_queue_item_id": preview_queue_item_id,
+                    "active_asset_id": preview_asset_id,
+                    "preview_queue_item_id": None,
+                    "preview_asset_id": None,
+                    "mode": "displaying",
+                    "display_started_at": now.isoformat(),
+                    "display_expires_at": self._future_iso(now, timeout_seconds),
+                    "updated_at": utcnow_iso(),
+                }
+            )
+            self.wake_event.set()
+            return applied
+
+    def next(self):
+        return self._commit_direction("next")
+
+    def previous(self):
+        return self._commit_direction("previous")
+
+    def pause(self):
+        state = self.playback_repo.update_state(
+            {
+                "mode": "paused",
+                "display_expires_at": None,
+                "updated_at": utcnow_iso(),
+            }
+        )
+        self.wake_event.set()
+        return state
+
+    def resume(self):
+        with self.lock:
+            state = self.playback_repo.get_state()
+            if not state.get("active_asset_id"):
+                raise ValueError("No active asset to resume")
+            timeout_seconds = self._resolve_timeout(state.get("active_queue_item_id"))
+            now = datetime.now(timezone.utc)
+            state = self.playback_repo.update_state(
+                {
+                    "mode": "displaying",
+                    "display_started_at": now.isoformat(),
+                    "display_expires_at": self._future_iso(now, timeout_seconds),
+                    "updated_at": utcnow_iso(),
+                }
+            )
+            self.wake_event.set()
+            return state
+
+    def get_display_status(self):
+        settings = self.playback_repo.get_settings()
+        state = self.playback_repo.get_state()
+        return {
+            "resolution": list(self.display_service.device_settings_service.get_resolution()),
+            "orientation": self.display_service.device_settings_service.get_setting("orientation"),
+            "active_asset_id": state.get("active_asset_id"),
+            "preview_asset_id": state.get("preview_asset_id"),
+            "mode": state.get("mode"),
+            "current_image_url": "/api/current-image",
+            "current_image_hash": state.get("last_image_hash"),
+            "last_rendered_at": state.get("last_rendered_at"),
+            "default_timeout_seconds": settings.get("default_timeout_seconds"),
+        }
+
+    def _commit_direction(self, direction: str):
+        with self.lock:
+            target = self._resolve_navigation_target(direction)
+            render_result = self.display_service.render_asset(
+                target["asset_id"],
+                fit_mode=target.get("fit_mode", "cover"),
+                background_mode=target.get("background_mode", "blur"),
+                background_color=target.get("background_color"),
+            )
+            now = datetime.now(timezone.utc)
+            timeout_seconds = self._resolve_timeout(target.get("queue_item_id"))
+            state = self.playback_repo.update_state(
+                {
+                    "active_queue_item_id": target.get("queue_item_id"),
+                    "active_asset_id": target["asset_id"],
+                    "preview_queue_item_id": None,
+                    "preview_asset_id": None,
+                    "mode": "displaying",
+                    "display_started_at": now.isoformat(),
+                    "display_expires_at": self._future_iso(now, timeout_seconds),
+                    "last_image_hash": render_result["image_hash"],
+                    "last_rendered_at": utcnow_iso(),
+                    "updated_at": utcnow_iso(),
+                }
+            )
+            self.wake_event.set()
+            return state
+
+    def _resolve_preview_target(self, queue_item_id=None, asset_id=None, direction=None):
+        if asset_id:
+            return {"asset_id": asset_id}
+        if queue_item_id:
+            item = self.queue_repo.get_item(queue_item_id)
+            if not item:
+                raise ValueError(f"Queue item '{queue_item_id}' does not exist")
+            item["queue_item_id"] = item["id"]
+            return item
+        if direction:
+            return self._resolve_navigation_target(direction, preview=True)
+        raise ValueError("One of queue_item_id, asset_id, or direction is required")
+
+    def _resolve_navigation_target(self, direction: str, preview: bool = False):
+        items = self.queue_repo.list_items(enabled_only=True)
+        if not items:
+            raise ValueError("Queue is empty")
+
+        settings = self.playback_repo.get_settings()
+        state = self.playback_repo.get_state()
+        if settings["shuffle_enabled"] and direction == "next":
+            item = random.choice(items)
+            item["queue_item_id"] = item["id"]
+            return item
+
+        state_key = "preview_queue_item_id" if preview and state.get("preview_queue_item_id") else "active_queue_item_id"
+        current_id = state.get(state_key) or state.get("active_queue_item_id")
+        ordered_ids = [item["id"] for item in items]
+        if current_id in ordered_ids:
+            index = ordered_ids.index(current_id)
+            if direction == "next":
+                index += 1
+            else:
+                index -= 1
+            if index >= len(items):
+                if not settings["loop_enabled"]:
+                    index = len(items) - 1
+                else:
+                    index = 0
+            if index < 0:
+                if not settings["loop_enabled"]:
+                    index = 0
+                else:
+                    index = len(items) - 1
+            item = items[index]
+        else:
+            item = items[0] if direction == "next" else items[-1]
+        item["queue_item_id"] = item["id"]
+        return item
+
+    def _resolve_timeout(self, queue_item_id: str | None) -> int:
+        if queue_item_id:
+            item = self.queue_repo.get_item(queue_item_id)
+            if item and item.get("timeout_seconds_override"):
+                return int(item["timeout_seconds_override"])
+        settings = self.playback_repo.get_settings()
+        return int(settings["default_timeout_seconds"])
+
+    def _future_iso(self, now: datetime, timeout_seconds: int) -> str:
+        return datetime.fromtimestamp(now.timestamp() + timeout_seconds, tz=timezone.utc).isoformat()
+
+    def _run_loop(self):
+        while not self.stop_event.is_set():
+            self.wake_event.wait(timeout=1)
+            self.wake_event.clear()
+            if self.stop_event.is_set():
+                break
+            with self.lock:
+                settings = self.playback_repo.get_settings()
+                state = self.playback_repo.get_state()
+                if not settings["auto_advance_enabled"]:
+                    continue
+                if state.get("mode") != "displaying" or not state.get("display_expires_at"):
+                    continue
+                expires_at = datetime.fromisoformat(state["display_expires_at"])
+                if datetime.now(timezone.utc) >= expires_at:
+                    try:
+                        self._commit_direction("next")
+                    except ValueError:
+                        self.playback_repo.update_state(
+                            {
+                                "mode": "idle",
+                                "display_expires_at": None,
+                                "updated_at": utcnow_iso(),
+                            }
+                        )

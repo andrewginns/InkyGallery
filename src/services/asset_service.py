@@ -1,0 +1,204 @@
+import hashlib
+import io
+import mimetypes
+import os
+import uuid
+from pathlib import Path
+
+from PIL import Image, ImageOps
+
+from utils.timestamps import utcnow_iso
+
+
+class AssetService:
+    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "avif", "heif", "heic"}
+
+    def __init__(self, assets_repo, queue_repo, media_store):
+        self.assets_repo = assets_repo
+        self.queue_repo = queue_repo
+        self.media_store = media_store
+
+    def ingest_uploads(self, files, duplicate_policy="reject", auto_add_to_queue=False):
+        created = []
+        duplicates = []
+
+        for file in files:
+            filename = file.filename or ""
+            extension = os.path.splitext(filename)[1].replace(".", "").lower()
+            if not filename or extension not in self.ALLOWED_EXTENSIONS:
+                raise ValueError(f"Unsupported file type for '{filename or 'upload'}'")
+
+            payload = file.read()
+            if not payload:
+                raise ValueError(f"Uploaded file '{filename}' is empty")
+
+            checksum = hashlib.sha256(payload).hexdigest()
+            existing = self.assets_repo.get_asset_by_checksum(checksum)
+            if existing:
+                if duplicate_policy == "reject":
+                    raise ValueError(f"Duplicate asset detected for '{filename}'")
+                duplicates.append(
+                    {
+                        "filename_original": filename,
+                        "existing_asset_id": existing["id"],
+                        "action": "reuse_existing" if duplicate_policy == "reuse_existing" else "keep_both",
+                    }
+                )
+                if duplicate_policy == "reuse_existing":
+                    if auto_add_to_queue:
+                        next_position = self.queue_repo.next_position()
+                        now = utcnow_iso()
+                        self.queue_repo.create_item(
+                            {
+                                "id": uuid.uuid4().hex,
+                                "asset_id": existing["id"],
+                                "position": next_position,
+                                "enabled": True,
+                                "timeout_seconds_override": None,
+                                "fit_mode": "cover",
+                                "background_mode": "blur",
+                                "background_color": None,
+                                "created_at": now,
+                                "updated_at": now,
+                            }
+                        )
+                    created.append(existing)
+                    continue
+
+            asset_id = uuid.uuid4().hex
+            image = Image.open(io.BytesIO(payload))
+            image = ImageOps.exif_transpose(image)
+            stored_name = f"original.{extension}"
+            buffer = io.BytesIO()
+            save_format = image.format or extension.upper()
+            if save_format == "JPG":
+                save_format = "JPEG"
+            if save_format in {"HEIC", "HEIF"}:
+                save_format = "PNG"
+                stored_name = "original.png"
+            image.save(buffer, format=save_format)
+            normalized_payload = buffer.getvalue()
+            stored_name, original_path = self.media_store.save_original_bytes(asset_id, stored_name, normalized_payload)
+
+            now = utcnow_iso()
+            asset = self.assets_repo.create_asset(
+                {
+                    "id": asset_id,
+                    "filename_original": filename,
+                    "filename_stored": stored_name,
+                    "mime_type": mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                    "extension": extension,
+                    "checksum_sha256": checksum,
+                    "width": image.size[0],
+                    "height": image.size[1],
+                    "file_size_bytes": len(normalized_payload),
+                    "favorite": False,
+                    "caption": None,
+                    "source_type": "upload",
+                    "created_at": now,
+                    "updated_at": now,
+                    "deleted_at": None,
+                }
+            )
+
+            self._create_thumbnail(asset_id, image.copy(), "thumbnail_sm", "sm.webp", 256)
+            self._create_thumbnail(asset_id, image.copy(), "thumbnail_md", "md.webp", 768)
+
+            if auto_add_to_queue:
+                next_position = self.queue_repo.next_position()
+                self.queue_repo.create_item(
+                    {
+                        "id": uuid.uuid4().hex,
+                        "asset_id": asset_id,
+                        "position": next_position,
+                        "enabled": True,
+                        "timeout_seconds_override": None,
+                        "fit_mode": "cover",
+                        "background_mode": "blur",
+                        "background_color": None,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+            created.append(asset)
+
+        return {"created": [self.serialize_asset(asset["id"]) for asset in created], "duplicates": duplicates}
+
+    def _create_thumbnail(self, asset_id: str, image: Image.Image, kind: str, filename: str, max_dim: int):
+        image.thumbnail((max_dim, max_dim))
+        payload_buffer = io.BytesIO()
+        image.save(payload_buffer, format="WEBP")
+        path = self.media_store.save_variant_bytes(asset_id, filename, payload_buffer.getvalue())
+        self.assets_repo.create_variant(
+            {
+                "id": uuid.uuid4().hex,
+                "asset_id": asset_id,
+                "kind": kind,
+                "path": str(path),
+                "width": image.size[0],
+                "height": image.size[1],
+                "created_at": utcnow_iso(),
+            }
+        )
+
+    def list_assets(self, q=None, sort="uploaded_newest", favorite=None, limit=50, cursor=0):
+        items, next_cursor = self.assets_repo.list_assets(q=q, sort=sort, favorite=favorite, limit=limit, cursor=cursor)
+        return {"items": [self.serialize_asset(item["id"]) for item in items], "next_cursor": next_cursor}
+
+    def serialize_asset(self, asset_id: str):
+        asset = self.assets_repo.get_asset(asset_id)
+        if not asset:
+            return None
+        variants = self.assets_repo.list_variants(asset_id)
+        thumbnails = {variant["kind"]: variant for variant in variants}
+        return {
+            "id": asset["id"],
+            "filename_original": asset["filename_original"],
+            "mime_type": asset["mime_type"],
+            "extension": asset["extension"],
+            "width": asset["width"],
+            "height": asset["height"],
+            "file_size_bytes": asset["file_size_bytes"],
+            "favorite": bool(asset["favorite"]),
+            "caption": asset["caption"],
+            "created_at": asset["created_at"],
+            "updated_at": asset["updated_at"],
+            "thumbnail_urls": {
+                "sm": f"/api/assets/{asset_id}/thumbnail?size=sm" if "thumbnail_sm" in thumbnails else None,
+                "md": f"/api/assets/{asset_id}/thumbnail?size=md" if "thumbnail_md" in thumbnails else None,
+            },
+            "file_url": f"/api/assets/{asset_id}/file",
+        }
+
+    def update_asset(self, asset_id: str, updates: dict):
+        safe_updates = {}
+        if "caption" in updates:
+            safe_updates["caption"] = updates["caption"]
+        if "favorite" in updates:
+            safe_updates["favorite"] = int(bool(updates["favorite"]))
+        safe_updates["updated_at"] = utcnow_iso()
+        asset = self.assets_repo.update_asset(asset_id, safe_updates)
+        if not asset:
+            return None
+        return self.serialize_asset(asset_id)
+
+    def delete_assets(self, asset_ids: list[str]):
+        for asset_id in asset_ids:
+            self.queue_repo.clear_asset_references(asset_id)
+            self.assets_repo.delete_asset(asset_id)
+            self.media_store.delete_asset_files(asset_id)
+
+    def get_original_path(self, asset_id: str) -> Path | None:
+        asset = self.assets_repo.get_asset(asset_id)
+        if not asset:
+            return None
+        return self.media_store.original_path(asset_id, asset["filename_stored"])
+
+    def get_thumbnail_path(self, asset_id: str, size: str) -> Path | None:
+        kind = {"sm": "thumbnail_sm", "md": "thumbnail_md"}.get(size)
+        if not kind:
+            return None
+        variant = self.assets_repo.get_variant(asset_id, kind)
+        if not variant:
+            return None
+        return Path(variant["path"])

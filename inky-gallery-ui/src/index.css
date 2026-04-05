@@ -1,0 +1,158 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 15% 97%;
+    --foreground: 30 10% 10%;
+    --card: 30 12% 95%;
+    --card-foreground: 30 10% 10%;
+    --popover: 30 12% 95%;
+    --popover-foreground: 30 10% 10%;
+    --primary: 28 80% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 10% 90%;
+    --secondary-foreground: 30 10% 20%;
+    --muted: 30 8% 92%;
+    --muted-foreground: 30 6% 50%;
+    --accent: 28 70% 94%;
+    --accent-foreground: 28 80% 30%;
+    --destructive: 4 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 10% 88%;
+    --input: 30 10% 88%;
+    --ring: 28 80% 52%;
+    --radius: 0.625rem;
+    --success: 152 56% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 10% 10%;
+  }
+
+  .dark {
+    --background: 220 14% 8%;
+    --foreground: 30 8% 92%;
+    --card: 220 12% 11%;
+    --card-foreground: 30 8% 92%;
+    --popover: 220 12% 11%;
+    --popover-foreground: 30 8% 92%;
+    --primary: 28 80% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 10% 16%;
+    --secondary-foreground: 30 8% 85%;
+    --muted: 220 10% 14%;
+    --muted-foreground: 220 6% 52%;
+    --accent: 28 40% 16%;
+    --accent-foreground: 28 70% 72%;
+    --destructive: 4 62% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 10% 16%;
+    --input: 220 10% 18%;
+    --ring: 28 80% 55%;
+    --success: 152 56% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 10% 10%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer utilities {
+  .text-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 999px;
+}
+
+/* Touch action for drag handles */
+.drag-handle {
+  touch-action: none;
+}
+
+/* Pulse animation for live indicator */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-live-pulse {
+  animation: live-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+/* Slide up animation for sheets */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Scale in for thumbnails */
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in {
+  animation: scale-in 0.25s ease-out forwards;
+}
+
+/* Shimmer loading effect */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}

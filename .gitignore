@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+.agents/
+src/data/
+src/static/images/current_image.png
+src/config/device.json
+inky-gallery-ui/node_modules/
+inky-gallery-ui/dist/
+inky-gallery-ui/playwright-report/
+inky-gallery-ui/test-results/

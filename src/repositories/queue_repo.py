@@ -1,0 +1,114 @@
+from typing import Any
+
+
+class QueueRepository:
+    def __init__(self, database):
+        self.database = database
+
+    def list_items(self, enabled_only=False):
+        clause = "WHERE q.enabled = 1" if enabled_only else ""
+        with self.database.connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    q.*,
+                    a.filename_original,
+                    a.filename_stored,
+                    a.mime_type,
+                    a.width,
+                    a.height,
+                    a.favorite,
+                    a.created_at AS asset_created_at
+                FROM queue_items q
+                JOIN assets a ON a.id = q.asset_id
+                {clause}
+                ORDER BY q.position ASC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_item(self, queue_item_id: str):
+        with self.database.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    q.*,
+                    a.filename_original,
+                    a.filename_stored,
+                    a.mime_type,
+                    a.width,
+                    a.height,
+                    a.favorite,
+                    a.created_at AS asset_created_at
+                FROM queue_items q
+                JOIN assets a ON a.id = q.asset_id
+                WHERE q.id = ?
+                """,
+                (queue_item_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def next_position(self) -> int:
+        with self.database.connection() as conn:
+            row = conn.execute("SELECT COALESCE(MAX(position), -1) AS position FROM queue_items").fetchone()
+        return int(row["position"]) + 1
+
+    def create_item(self, item: dict[str, Any]):
+        with self.database.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO queue_items (
+                    id, asset_id, position, enabled, timeout_seconds_override,
+                    fit_mode, background_mode, background_color, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item["id"],
+                    item["asset_id"],
+                    item["position"],
+                    int(item.get("enabled", True)),
+                    item.get("timeout_seconds_override"),
+                    item.get("fit_mode", "cover"),
+                    item.get("background_mode", "blur"),
+                    item.get("background_color"),
+                    item["created_at"],
+                    item["updated_at"],
+                ),
+            )
+        return self.get_item(item["id"])
+
+    def update_item(self, queue_item_id: str, updates: dict[str, Any]):
+        if not updates:
+            return self.get_item(queue_item_id)
+        assignments = ", ".join(f"{key} = ?" for key in updates.keys())
+        params = list(updates.values()) + [queue_item_id]
+        with self.database.connection() as conn:
+            conn.execute(f"UPDATE queue_items SET {assignments} WHERE id = ?", params)
+        return self.get_item(queue_item_id)
+
+    def delete_item(self, queue_item_id: str):
+        with self.database.connection() as conn:
+            conn.execute("DELETE FROM queue_items WHERE id = ?", (queue_item_id,))
+        self.normalize_positions()
+
+    def clear_asset_references(self, asset_id: str):
+        with self.database.connection() as conn:
+            conn.execute("DELETE FROM queue_items WHERE asset_id = ?", (asset_id,))
+        self.normalize_positions()
+
+    def normalize_positions(self):
+        items = self.list_items()
+        with self.database.connection() as conn:
+            for position, item in enumerate(items):
+                conn.execute("UPDATE queue_items SET position = ? WHERE id = ?", (position, item["id"]))
+
+    def reorder(self, ordered_ids: list[str]):
+        existing = {item["id"] for item in self.list_items()}
+        if existing != set(ordered_ids):
+            raise ValueError("Ordered queue item ids must match the existing queue exactly.")
+        with self.database.connection() as conn:
+            for position, queue_item_id in enumerate(ordered_ids):
+                conn.execute(
+                    "UPDATE queue_items SET position = ? WHERE id = ?",
+                    (position, queue_item_id),
+                )
