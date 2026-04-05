@@ -22,10 +22,8 @@ import {
   getDisplayStatus,
   getPlayback,
   listAssets,
-  nextPlayback,
   pausePlayback,
   previewPlayback,
-  previousPlayback,
   reorderQueue,
   resumePlayback,
   sortQueue,
@@ -204,21 +202,21 @@ export default function App() {
   }, [loading]);
 
   const handlePreviewAsset = (assetId: string) =>
-    withAction('Rendering preview…', async () => {
+    withAction('Updating preview…', async () => {
       setActiveTab('now-playing');
       await previewPlayback({ asset_id: assetId });
       await refreshPlaybackAndDisplay();
     });
 
   const handlePreviewQueueItem = (queueItemId: string) =>
-    withAction('Rendering preview…', async () => {
+    withAction('Updating preview…', async () => {
       setActiveTab('now-playing');
       await previewPlayback({ queue_item_id: queueItemId });
       await refreshPlaybackAndDisplay();
     });
 
   const handlePreviewDirection = (direction: 'next' | 'previous') =>
-    withAction('Rendering preview…', async () => {
+    withAction('Updating preview…', async () => {
       await previewPlayback({ direction });
       await refreshPlaybackAndDisplay();
     });
@@ -325,20 +323,8 @@ export default function App() {
     });
 
   const handleApply = () =>
-    withAction('Applying preview…', async () => {
+    withAction('Rendering to device…', async () => {
       await applyPreview();
-      await refreshPlaybackAndDisplay();
-    });
-
-  const handleNext = () =>
-    withAction('Showing next image…', async () => {
-      await nextPlayback();
-      await refreshPlaybackAndDisplay();
-    });
-
-  const handlePrevious = () =>
-    withAction('Showing previous image…', async () => {
-      await previousPlayback();
       await refreshPlaybackAndDisplay();
     });
 
@@ -359,6 +345,7 @@ export default function App() {
     displayStatus?.hardware.hardware_enabled && !displayStatus.hardware.hardware_ready
       ? displayStatus.hardware.init_error || 'Inky hardware is attached but not ready.'
       : null;
+  const isRenderingToDevice = busyMessage === 'Rendering to device…';
 
   const pageTitle = {
     'now-playing': 'Now Playing',
@@ -424,9 +411,8 @@ export default function App() {
                 onPause={handlePause}
                 onResume={handleResume}
                 onApply={handleApply}
-                onNext={handleNext}
-                onPrevious={handlePrevious}
                 onPreviewDirection={handlePreviewDirection}
+                isRendering={isRenderingToDevice}
               />
             )}
             {activeTab === 'library' && (

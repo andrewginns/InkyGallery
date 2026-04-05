@@ -74,11 +74,19 @@ def test_queue_and_playback_flow(client, sample_png_bytes):
     assert preview.status_code == 200, preview.json
     assert preview.json["mode"] == "preview"
     assert preview.json["preview_queue_item_id"] == queue_item_id
+    assert preview.json["last_image_hash"] is None
+    assert preview.json["last_rendered_at"] is None
+
+    preview_status = client.get("/api/display/status")
+    assert preview_status.status_code == 200
+    assert preview_status.json["current_image_hash"] is None
 
     apply_response = client.post("/api/playback/apply")
     assert apply_response.status_code == 200, apply_response.json
     assert apply_response.json["mode"] == "displaying"
     assert apply_response.json["active_queue_item_id"] == queue_item_id
+    assert apply_response.json["last_image_hash"] is not None
+    assert apply_response.json["last_rendered_at"] is not None
 
     playback = client.get("/api/playback")
     assert playback.status_code == 200

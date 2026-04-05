@@ -156,3 +156,30 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
+
+@keyframes rendering-image {
+  0% { transform: scale(1) translateY(0); filter: saturate(1) brightness(1); }
+  50% { transform: scale(1.02) translateY(-2px); filter: saturate(1.08) brightness(1.04); }
+  100% { transform: scale(1) translateY(0); filter: saturate(1) brightness(1); }
+}
+.animate-rendering-image {
+  animation: rendering-image 1.6s ease-in-out infinite;
+}
+
+@keyframes rendering-overlay {
+  0% { background-position: -160% 0; opacity: 0.45; }
+  50% { opacity: 0.7; }
+  100% { background-position: 160% 0; opacity: 0.45; }
+}
+.animate-rendering-overlay {
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    hsl(var(--primary) / 0.06) 40%,
+    hsl(var(--primary) / 0.18) 50%,
+    hsl(var(--primary) / 0.06) 60%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: rendering-overlay 1.8s ease-in-out infinite;
+}

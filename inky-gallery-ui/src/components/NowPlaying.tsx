@@ -22,11 +22,10 @@ interface NowPlayingProps {
   playbackSettings: PlaybackSettings;
   queue: QueueItem[];
   assets: Asset[];
+  isRendering?: boolean;
   onPause: () => void;
   onResume: () => void;
   onApply: () => void;
-  onNext: () => void;
-  onPrevious: () => void;
   onPreviewDirection: (direction: 'next' | 'previous') => void;
 }
 
@@ -52,11 +51,10 @@ export default function NowPlaying({
   playbackSettings,
   queue,
   assets,
+  isRendering = false,
   onPause,
   onResume,
   onApply,
-  onNext,
-  onPrevious,
   onPreviewDirection,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -72,6 +70,7 @@ export default function NowPlaying({
   const displayedUrl = previewAsset
     ? previewAsset.original_url
     : playbackState.current_image_url || playbackState.last_rendered_url;
+  const liveQueueItem = activeQueueItem;
 
   const isPreview = playbackState.mode === 'preview';
   const isPaused = playbackState.mode === 'paused';
@@ -81,7 +80,7 @@ export default function NowPlaying({
     activeQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
 
   useEffect(() => {
-    if (playbackState.mode !== 'displaying') {
+    if (playbackState.mode === 'paused' || !playbackState.display_expires_at) {
       setTimeRemaining(playbackState.time_remaining_seconds ?? effectiveTimeout);
       return undefined;
     }
@@ -152,10 +151,22 @@ export default function NowPlaying({
                 src={displayedUrl || ''}
                 alt={displayedAsset?.filename_original || 'Display'}
                 className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${
+                  isRendering ? 'animate-rendering-image' : ''
+                } ${
                   imageLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
                 onLoad={() => setImageLoaded(true)}
               />
+              {isRendering && imageLoaded && (
+                <div className="absolute inset-0 animate-rendering-overlay pointer-events-none">
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent px-3 py-4">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 text-xs font-medium text-white/90 backdrop-blur-md">
+                      <span className="h-2 w-2 rounded-full bg-primary animate-live-pulse" />
+                      Rendering to device…
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -251,10 +262,10 @@ export default function NowPlaying({
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Queue Position
+                {isPreview ? 'Live Queue Position' : 'Queue Position'}
               </span>
               <span className="text-xs text-muted-foreground">
-                {activeQueueItem ? activeQueueItem.position + 1 : 0} of {queue.length}
+                {liveQueueItem ? `${liveQueueItem.position + 1} of ${queue.length}` : 'Not in queue'}
               </span>
             </div>
             <div className="flex gap-1">
@@ -262,7 +273,7 @@ export default function NowPlaying({
                 <div
                   key={item.id}
                   className={`h-1 flex-1 rounded-full transition-colors ${
-                    item.id === playbackState.active_queue_item_id
+                    item.id === liveQueueItem?.id
                       ? 'bg-primary'
                       : item.enabled
                         ? 'bg-muted-foreground/20'
@@ -274,13 +285,13 @@ export default function NowPlaying({
           </div>
         )}
 
-        {!isIdle && queue.length > 1 && activeQueueItem && (
+        {!isIdle && queue.length > 1 && liveQueueItem && (
           <div className="mb-3">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Up Next
             </span>
             {(() => {
-              const nextIndex = (activeQueueItem.position + 1) % queue.length;
+              const nextIndex = (liveQueueItem.position + 1) % queue.length;
               const nextItem = queue.find((item) => item.position === nextIndex);
               if (!nextItem) return null;
               return (
@@ -315,7 +326,7 @@ export default function NowPlaying({
             size="icon"
             className="h-11 w-11 rounded-full"
             id="btn-previous"
-            onClick={onPrevious}
+            onClick={() => onPreviewDirection('previous')}
             disabled={!hasQueue}
           >
             <SkipBack className="w-5 h-5" />
@@ -375,7 +386,7 @@ export default function NowPlaying({
             size="icon"
             className="h-11 w-11 rounded-full"
             id="btn-next"
-            onClick={onNext}
+            onClick={() => onPreviewDirection('next')}
             disabled={!hasQueue}
           >
             <SkipForward className="w-5 h-5" />

@@ -60,18 +60,10 @@ class PlaybackController:
     def preview(self, queue_item_id=None, asset_id=None, direction=None):
         with self.lock:
             target = self._resolve_preview_target(queue_item_id=queue_item_id, asset_id=asset_id, direction=direction)
-            render_result = self.display_service.render_asset(
-                target["asset_id"],
-                fit_mode=target.get("fit_mode", "cover"),
-                background_mode=target.get("background_mode", "blur"),
-                background_color=target.get("background_color"),
-            )
             state_updates = {
                 "preview_queue_item_id": target.get("queue_item_id"),
                 "preview_asset_id": target["asset_id"],
                 "mode": "preview",
-                "last_image_hash": render_result["image_hash"],
-                "last_rendered_at": utcnow_iso(),
                 "updated_at": utcnow_iso(),
             }
             state = self.playback_repo.update_state(state_updates)
@@ -85,6 +77,16 @@ class PlaybackController:
             if not preview_asset_id:
                 raise ValueError("No preview asset is active")
             preview_queue_item_id = state.get("preview_queue_item_id")
+            render_target = self._resolve_render_target(
+                preview_asset_id=preview_asset_id,
+                preview_queue_item_id=preview_queue_item_id,
+            )
+            render_result = self.display_service.render_asset(
+                render_target["asset_id"],
+                fit_mode=render_target.get("fit_mode", "cover"),
+                background_mode=render_target.get("background_mode", "blur"),
+                background_color=render_target.get("background_color"),
+            )
             timeout_seconds = self._resolve_timeout(preview_queue_item_id)
             now = datetime.now(timezone.utc)
             applied = self.playback_repo.update_state(
@@ -96,6 +98,8 @@ class PlaybackController:
                     "mode": "displaying",
                     "display_started_at": now.isoformat(),
                     "display_expires_at": self._future_iso(now, timeout_seconds),
+                    "last_image_hash": render_result["image_hash"],
+                    "last_rendered_at": utcnow_iso(),
                     "updated_at": utcnow_iso(),
                 }
             )
@@ -200,8 +204,9 @@ class PlaybackController:
                 return self.playback_repo.update_state(updates)
             return state
 
-    def _commit_direction(self, direction: str):
+    def _commit_direction(self, direction: str, preserve_preview: bool = False):
         with self.lock:
+            existing_state = self.playback_repo.get_state()
             target = self._resolve_navigation_target(direction)
             render_result = self.display_service.render_asset(
                 target["asset_id"],
@@ -215,9 +220,13 @@ class PlaybackController:
                 {
                     "active_queue_item_id": target.get("queue_item_id"),
                     "active_asset_id": target["asset_id"],
-                    "preview_queue_item_id": None,
-                    "preview_asset_id": None,
-                    "mode": "displaying",
+                    "preview_queue_item_id": (
+                        existing_state.get("preview_queue_item_id") if preserve_preview else None
+                    ),
+                    "preview_asset_id": (
+                        existing_state.get("preview_asset_id") if preserve_preview else None
+                    ),
+                    "mode": "preview" if preserve_preview and existing_state.get("preview_asset_id") else "displaying",
                     "display_started_at": now.isoformat(),
                     "display_expires_at": self._future_iso(now, timeout_seconds),
                     "last_image_hash": render_result["image_hash"],
@@ -307,12 +316,12 @@ class PlaybackController:
                 state = self.playback_repo.get_state()
                 if not settings["auto_advance_enabled"]:
                     continue
-                if state.get("mode") != "displaying" or not state.get("display_expires_at"):
+                if state.get("mode") == "paused" or not state.get("display_expires_at"):
                     continue
                 expires_at = datetime.fromisoformat(state["display_expires_at"])
                 if datetime.now(timezone.utc) >= expires_at:
                     try:
-                        self._commit_direction("next")
+                        self._commit_direction("next", preserve_preview=bool(state.get("preview_asset_id")))
                     except ValueError:
                         self.playback_repo.update_state(
                             {
@@ -321,3 +330,12 @@ class PlaybackController:
                                 "updated_at": utcnow_iso(),
                             }
                         )
+
+    def _resolve_render_target(self, preview_asset_id: str, preview_queue_item_id: str | None):
+        if preview_queue_item_id:
+            item = self.queue_repo.get_item(preview_queue_item_id)
+            if not item:
+                raise ValueError(f"Queue item '{preview_queue_item_id}' does not exist")
+            item["queue_item_id"] = item["id"]
+            return item
+        return {"asset_id": preview_asset_id}
