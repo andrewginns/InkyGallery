@@ -1,0 +1,16 @@
+[Unit]
+Description=InkyGallery web app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/InkyGallery
+ExecStart=/home/pi/InkyGallery/.venv/bin/python -m waitress --listen=0.0.0.0:8080 run:app
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
