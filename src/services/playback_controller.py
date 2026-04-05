@@ -60,6 +60,17 @@ class PlaybackController:
     def preview(self, queue_item_id=None, asset_id=None, direction=None):
         with self.lock:
             target = self._resolve_preview_target(queue_item_id=queue_item_id, asset_id=asset_id, direction=direction)
+            current_state = self.playback_repo.get_state()
+            if self._matches_active_target(current_state, target):
+                state_updates = {
+                    "preview_queue_item_id": None,
+                    "preview_asset_id": None,
+                    "mode": self._active_mode(current_state),
+                    "updated_at": utcnow_iso(),
+                }
+                state = self.playback_repo.update_state(state_updates)
+                self.wake_event.set()
+                return state
             state_updates = {
                 "preview_queue_item_id": target.get("queue_item_id"),
                 "preview_asset_id": target["asset_id"],
@@ -339,3 +350,16 @@ class PlaybackController:
             item["queue_item_id"] = item["id"]
             return item
         return {"asset_id": preview_asset_id}
+
+    def _matches_active_target(self, state: dict, target: dict) -> bool:
+        active_asset_id = state.get("active_asset_id")
+        active_queue_item_id = state.get("active_queue_item_id")
+        target_queue_item_id = target.get("queue_item_id")
+        if target_queue_item_id:
+            return target_queue_item_id == active_queue_item_id
+        return bool(active_asset_id) and target["asset_id"] == active_asset_id
+
+    def _active_mode(self, state: dict) -> str:
+        if not state.get("active_asset_id"):
+            return "idle"
+        return "paused" if state.get("mode") == "paused" or not state.get("display_expires_at") else "displaying"

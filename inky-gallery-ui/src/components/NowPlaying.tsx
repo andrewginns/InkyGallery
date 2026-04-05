@@ -67,9 +67,11 @@ export default function NowPlaying({
   const activeQueueItem = queue.find((item) => item.id === playbackState.active_queue_item_id) || null;
 
   const displayedAsset = previewAsset || activeAsset;
-  const displayedUrl = previewAsset
-    ? previewAsset.original_url
-    : playbackState.current_image_url || playbackState.last_rendered_url;
+  const displayedUrl =
+    previewAsset?.original_url ||
+    activeAsset?.original_url ||
+    playbackState.current_image_url ||
+    playbackState.last_rendered_url;
   const liveQueueItem = activeQueueItem;
 
   const isPreview = playbackState.mode === 'preview';

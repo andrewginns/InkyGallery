@@ -93,6 +93,13 @@ def test_queue_and_playback_flow(client, sample_png_bytes):
     assert playback.json["state"]["mode"] == "displaying"
     assert playback.json["active_item"]["id"] == queue_item_id
 
+    repreview = client.post("/api/playback/preview", json={"queue_item_id": queue_item_id})
+    assert repreview.status_code == 200, repreview.json
+    assert repreview.json["mode"] == "displaying"
+    assert repreview.json["preview_queue_item_id"] is None
+    assert repreview.json["preview_asset_id"] is None
+    assert repreview.json["active_queue_item_id"] == queue_item_id
+
     display_status = client.get("/api/display/status")
     assert display_status.status_code == 200
     assert display_status.json["active_asset_id"] == asset_id
