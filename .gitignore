@@ -8,6 +8,7 @@ env/
 src/data/
 src/static/images/current_image.png
 src/config/device.json
+inkygallery.log
 inky-gallery-ui/node_modules/
 inky-gallery-ui/dist/
 inky-gallery-ui/playwright-report/
