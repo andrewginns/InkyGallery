@@ -163,6 +163,9 @@ class AssetService:
             "caption": asset["caption"],
             "created_at": asset["created_at"],
             "updated_at": asset["updated_at"],
+            "thumbnail_url": f"/api/assets/{asset_id}/thumbnail?size=sm" if "thumbnail_sm" in thumbnails else None,
+            "thumbnail_url_md": f"/api/assets/{asset_id}/thumbnail?size=md" if "thumbnail_md" in thumbnails else None,
+            "original_url": f"/api/assets/{asset_id}/file",
             "thumbnail_urls": {
                 "sm": f"/api/assets/{asset_id}/thumbnail?size=sm" if "thumbnail_sm" in thumbnails else None,
                 "md": f"/api/assets/{asset_id}/thumbnail?size=md" if "thumbnail_md" in thumbnails else None,

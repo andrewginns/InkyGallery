@@ -18,6 +18,7 @@ def create_queue_blueprint(queue_service, playback_controller):
             result = queue_service.add_assets(asset_ids, data.get("initial_settings"))
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        playback_controller.reconcile_state()
         playback_controller.wake_event.set()
         return jsonify(result), 201
 
@@ -29,12 +30,14 @@ def create_queue_blueprint(queue_service, playback_controller):
             return jsonify({"error": str(exc)}), 400
         if not item:
             return jsonify({"error": "Queue item not found"}), 404
+        playback_controller.reconcile_state()
         playback_controller.wake_event.set()
         return jsonify(item)
 
     @blueprint.delete("/api/queue/items/<queue_item_id>")
     def delete_queue_item(queue_item_id: str):
         queue_service.delete_item(queue_item_id)
+        playback_controller.reconcile_state()
         playback_controller.wake_event.set()
         return jsonify({"success": True})
 
@@ -48,6 +51,7 @@ def create_queue_blueprint(queue_service, playback_controller):
             result = queue_service.reorder(ordered_ids)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        playback_controller.reconcile_state()
         playback_controller.wake_event.set()
         return jsonify(result)
 
@@ -58,8 +62,8 @@ def create_queue_blueprint(queue_service, playback_controller):
             result = queue_service.sort(data.get("sort_mode", "manual"))
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        playback_controller.reconcile_state()
         playback_controller.wake_event.set()
         return jsonify(result)
 
     return blueprint
-

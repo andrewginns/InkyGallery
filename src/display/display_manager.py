@@ -23,3 +23,8 @@ class DisplayManager:
         self.display.display_image(image)
         return image
 
+    def get_status(self):
+        status = self.display.get_status()
+        status["current_image_path"] = str(self.current_image_path)
+        status["current_image_exists"] = self.current_image_path.exists()
+        return status

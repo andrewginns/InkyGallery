@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,19 +34,25 @@ import type { DeviceSettings, PlaybackSettings } from '@/data/types';
 interface SettingsProps {
   deviceSettings: DeviceSettings;
   playbackSettings: PlaybackSettings;
-  onDeviceSettingsChange: (settings: DeviceSettings) => void;
-  onPlaybackSettingsChange: (settings: PlaybackSettings) => void;
+  onSave: (deviceSettings: DeviceSettings, playbackSettings: PlaybackSettings) => void;
+  saving?: boolean;
 }
 
 export default function Settings({
   deviceSettings,
   playbackSettings,
-  onDeviceSettingsChange,
-  onPlaybackSettingsChange,
+  onSave,
+  saving = false,
 }: SettingsProps) {
   const [localDevice, setLocalDevice] = useState(deviceSettings);
   const [localPlayback, setLocalPlayback] = useState(playbackSettings);
   const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setLocalDevice(deviceSettings);
+    setLocalPlayback(playbackSettings);
+    setHasChanges(false);
+  }, [deviceSettings, playbackSettings]);
 
   const updateDevice = (patch: Partial<DeviceSettings>) => {
     setLocalDevice((prev) => ({ ...prev, ...patch }));
@@ -67,9 +73,7 @@ export default function Settings({
   };
 
   const handleSave = () => {
-    onDeviceSettingsChange(localDevice);
-    onPlaybackSettingsChange(localPlayback);
-    setHasChanges(false);
+    onSave(localDevice, localPlayback);
   };
 
   const handleReset = () => {
@@ -382,6 +386,7 @@ export default function Settings({
               variant="outline"
               className="flex-1 h-10 rounded-xl gap-1.5"
               onClick={handleReset}
+              disabled={saving}
             >
               <RotateCcw className="w-4 h-4" />
               Reset
@@ -390,9 +395,10 @@ export default function Settings({
               className="flex-1 h-10 rounded-xl gap-1.5"
               onClick={handleSave}
               id="btn-save-settings"
+              disabled={saving}
             >
               <Save className="w-4 h-4" />
-              Save Changes
+              {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>
         </div>
@@ -414,7 +420,7 @@ function EnhancementSlider({
   isDefault,
   hint,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: number;
   defaultValue: number;

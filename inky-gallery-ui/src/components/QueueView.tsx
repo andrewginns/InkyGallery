@@ -11,12 +11,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -32,21 +26,25 @@ import {
   Maximize,
   Minimize,
   Palette,
-  ToggleLeft,
   MonitorPlay,
-  X,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import type { QueueItem, PlaybackState } from '@/data/types';
+import type { QueueItem, PlaybackState, QueueSortMode } from '@/data/types';
 
 interface QueueProps {
   queue: QueueItem[];
   playbackState: PlaybackState;
   defaultTimeout: number;
-  onQueueChange: (queue: QueueItem[]) => void;
+  sortMode: QueueSortMode;
   onPreview: (queueItemId: string) => void;
+  onUpdateItem: (queueItemId: string, updates: Partial<QueueItem>) => void;
+  onRemoveItem: (queueItemId: string) => void;
+  onMoveItem: (queueItemId: string, direction: 'up' | 'down') => void;
+  onSortChange: (sortMode: QueueSortMode) => void;
 }
 
 function formatTimeout(seconds: number | null, defaultSeconds: number): string {
@@ -61,29 +59,23 @@ export default function Queue({
   queue,
   playbackState,
   defaultTimeout,
-  onQueueChange,
+  sortMode,
   onPreview,
+  onUpdateItem,
+  onRemoveItem,
+  onMoveItem,
+  onSortChange,
 }: QueueProps) {
   const [editingItem, setEditingItem] = useState<QueueItem | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
-  const handleToggleEnabled = (id: string) => {
-    const updated = queue.map((item) =>
-      item.id === id ? { ...item, enabled: !item.enabled } : item
-    );
-    onQueueChange(updated);
-  };
-
-  const handleRemove = (id: string) => {
-    const updated = queue
-      .filter((item) => item.id !== id)
-      .map((item, i) => ({ ...item, position: i }));
-    onQueueChange(updated);
-  };
-
   const handleSaveItemSettings = (updated: QueueItem) => {
-    const newQueue = queue.map((item) => (item.id === updated.id ? updated : item));
-    onQueueChange(newQueue);
+    onUpdateItem(updated.id, {
+      fit_mode: updated.fit_mode,
+      background_mode: updated.background_mode,
+      background_color: updated.background_color,
+      timeout_seconds_override: updated.timeout_seconds_override,
+    });
     setEditingItem(null);
   };
 
@@ -99,7 +91,7 @@ export default function Queue({
               {queue.length} item{queue.length !== 1 ? 's' : ''} · {enabledCount} enabled
             </span>
           </div>
-          <Select defaultValue="manual">
+          <Select value={sortMode} onValueChange={(value) => onSortChange(value as QueueSortMode)}>
             <SelectTrigger className="h-8 text-xs w-auto min-w-[120px] rounded-lg gap-1.5" id="queue-sort">
               <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
               <SelectValue />
@@ -161,7 +153,7 @@ export default function Queue({
                   {/* Thumbnail */}
                   <div className="relative flex-shrink-0">
                     <img
-                      src={item.asset.thumbnail_url}
+                      src={item.asset.thumbnail_url || item.asset.original_url}
                       alt={item.asset.filename_original}
                       className="w-12 h-12 rounded-lg object-cover"
                     />
@@ -221,10 +213,30 @@ export default function Queue({
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Switch
                       checked={item.enabled}
-                      onCheckedChange={() => handleToggleEnabled(item.id)}
+                      onCheckedChange={(enabled: boolean) => onUpdateItem(item.id, { enabled })}
                       className="scale-75"
                       id={`toggle-${item.id}`}
                     />
+                    <div className="flex flex-col">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => onMoveItem(item.id, 'up')}
+                        disabled={index === 0}
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => onMoveItem(item.id, 'down')}
+                        disabled={index === queue.length - 1}
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -245,7 +257,7 @@ export default function Queue({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                      onClick={() => handleRemove(item.id)}
+                      onClick={() => onRemoveItem(item.id)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -311,7 +323,7 @@ function ItemSettingsEditor({
       <SheetHeader>
         <SheetTitle className="flex items-center gap-3">
           <img
-            src={item.asset.thumbnail_url}
+            src={item.asset.thumbnail_url || item.asset.original_url}
             alt={item.asset.filename_original}
             className="w-10 h-10 rounded-lg object-cover"
           />

@@ -16,6 +16,12 @@ def test_health_and_defaults(client):
     assert current_image.status_code == 200
     assert current_image.mimetype == "image/png"
 
+    display_status = client.get("/api/display/status")
+    assert display_status.status_code == 200
+    assert display_status.json["hardware"]["display_type"] == "inky"
+    assert display_status.json["hardware"]["hardware_enabled"] is False
+    assert display_status.json["hardware"]["hardware_ready"] is False
+
 
 def test_asset_upload_and_list(client, sample_png_bytes):
     response = client.post(
@@ -33,6 +39,8 @@ def test_asset_upload_and_list(client, sample_png_bytes):
     asset = client.get(f"/api/assets/{asset_id}")
     assert asset.status_code == 200
     assert asset.json["filename_original"] == "sample.png"
+    assert asset.json["thumbnail_url"] == f"/api/assets/{asset_id}/thumbnail?size=sm"
+    assert asset.json["original_url"] == f"/api/assets/{asset_id}/file"
 
     listed = client.get("/api/assets")
     assert listed.status_code == 200
@@ -126,3 +134,31 @@ def test_duplicate_reuse_existing_with_auto_queue(client, sample_png_bytes):
     assert queue.status_code == 200
     assert len(queue.json["items"]) == 1
     assert queue.json["items"][0]["asset"]["id"] == asset_id
+
+
+def test_playback_reconciles_after_asset_delete(client, sample_png_bytes):
+    upload = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(sample_png_bytes), "to-delete.png")},
+        content_type="multipart/form-data",
+    )
+    asset_id = upload.json["created"][0]["id"]
+
+    queue_add = client.post("/api/queue/items", json={"asset_ids": [asset_id]})
+    queue_item_id = queue_add.json["items"][0]["id"]
+
+    preview = client.post("/api/playback/preview", json={"queue_item_id": queue_item_id})
+    assert preview.status_code == 200
+
+    applied = client.post("/api/playback/apply")
+    assert applied.status_code == 200
+    assert applied.json["active_asset_id"] == asset_id
+
+    deleted = client.delete(f"/api/assets/{asset_id}")
+    assert deleted.status_code == 200
+
+    playback = client.get("/api/playback")
+    assert playback.status_code == 200
+    assert playback.json["state"]["mode"] == "idle"
+    assert playback.json["state"]["active_asset_id"] is None
+    assert playback.json["state"]["active_queue_item_id"] is None

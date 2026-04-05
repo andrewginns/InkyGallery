@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, send_file
 
 
-def create_assets_blueprint(asset_service):
+def create_assets_blueprint(asset_service, playback_controller):
     blueprint = Blueprint("assets_api", __name__)
 
     @blueprint.get("/api/assets")
@@ -46,6 +46,8 @@ def create_assets_blueprint(asset_service):
         if not asset_service.serialize_asset(asset_id):
             return jsonify({"error": "Asset not found"}), 404
         asset_service.delete_assets([asset_id])
+        playback_controller.reconcile_state()
+        playback_controller.wake_event.set()
         return jsonify({"success": True})
 
     @blueprint.post("/api/assets/bulk-delete")
@@ -55,6 +57,8 @@ def create_assets_blueprint(asset_service):
         if not isinstance(asset_ids, list) or not asset_ids:
             return jsonify({"error": "asset_ids must be a non-empty list"}), 400
         asset_service.delete_assets(asset_ids)
+        playback_controller.reconcile_state()
+        playback_controller.wake_event.set()
         return jsonify({"success": True, "deleted_asset_ids": asset_ids})
 
     @blueprint.get("/api/assets/<asset_id>/file")
@@ -73,4 +77,3 @@ def create_assets_blueprint(asset_service):
         return send_file(path, mimetype="image/webp")
 
     return blueprint
-

@@ -1,28 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
-  SkipBack,
-  SkipForward,
-  Play,
-  Pause,
-  Eye,
-  Send,
-  Clock,
-  Repeat,
-  Shuffle,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Eye,
+  Pause,
+  Play,
+  Repeat,
+  Send,
+  Shuffle,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
-import type { PlaybackState, PlaybackSettings, QueueItem, Asset } from '@/data/types';
+import type { Asset, PlaybackSettings, PlaybackState, QueueItem } from '@/data/types';
 
 interface NowPlayingProps {
   playbackState: PlaybackState;
   playbackSettings: PlaybackSettings;
   queue: QueueItem[];
   assets: Asset[];
-  onPlaybackStateChange: (state: PlaybackState) => void;
+  onPause: () => void;
+  onResume: () => void;
+  onApply: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  onPreviewDirection: (direction: 'next' | 'previous') => void;
 }
 
 function formatTimeAgo(iso: string | null): string {
@@ -47,75 +52,88 @@ export default function NowPlaying({
   playbackSettings,
   queue,
   assets,
-  onPlaybackStateChange,
+  onPause,
+  onResume,
+  onApply,
+  onNext,
+  onPrevious,
+  onPreviewDirection,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(
+    playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
+  );
 
-  const activeAsset = assets.find((a) => a.id === playbackState.active_asset_id);
-  const previewAsset = playbackState.preview_asset_id
-    ? assets.find((a) => a.id === playbackState.preview_asset_id)
-    : null;
-  const activeQueueItem = queue.find((q) => q.id === playbackState.active_queue_item_id);
+  const activeAsset = assets.find((asset) => asset.id === playbackState.active_asset_id) || null;
+  const previewAsset = assets.find((asset) => asset.id === playbackState.preview_asset_id) || null;
+  const activeQueueItem = queue.find((item) => item.id === playbackState.active_queue_item_id) || null;
 
   const displayedAsset = previewAsset || activeAsset;
   const displayedUrl = previewAsset
     ? previewAsset.original_url
-    : playbackState.last_rendered_url;
+    : playbackState.current_image_url || playbackState.last_rendered_url;
 
   const isPreview = playbackState.mode === 'preview';
   const isPaused = playbackState.mode === 'paused';
   const isIdle = playbackState.mode === 'idle';
+  const hasQueue = queue.length > 0;
+  const effectiveTimeout =
+    activeQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
 
-  const effectiveTimeout = activeQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
-
-  // Simulate time remaining
-  const [timeRemaining, setTimeRemaining] = useState(effectiveTimeout);
   useEffect(() => {
-    if (playbackState.mode !== 'displaying') return;
-    const interval = setInterval(() => {
-      setTimeRemaining((t) => Math.max(0, t - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [playbackState.mode]);
+    if (playbackState.mode !== 'displaying') {
+      setTimeRemaining(playbackState.time_remaining_seconds ?? effectiveTimeout);
+      return undefined;
+    }
 
-  const modeLabel = {
+    const updateRemaining = () => {
+      if (playbackState.display_expires_at) {
+        const remaining = Math.max(
+          0,
+          Math.ceil(
+            (new Date(playbackState.display_expires_at).getTime() - Date.now()) / 1000
+          )
+        );
+        setTimeRemaining(remaining);
+        return;
+      }
+      setTimeRemaining(playbackState.time_remaining_seconds ?? effectiveTimeout);
+    };
+
+    updateRemaining();
+    const interval = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(interval);
+  }, [
+    effectiveTimeout,
+    playbackState.display_expires_at,
+    playbackState.mode,
+    playbackState.time_remaining_seconds,
+  ]);
+
+  useEffect(() => {
+    setImageLoaded(false);
+  }, [displayedUrl]);
+
+  const modeLabel: Record<PlaybackState['mode'], string> = {
     idle: 'Idle',
     preview: 'Previewing',
     displaying: 'Live',
     paused: 'Paused',
-  }[playbackState.mode];
+  };
 
-  const modeColor = {
+  const modeColor: Record<PlaybackState['mode'], string> = {
     idle: 'bg-muted text-muted-foreground',
-    preview: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
-    displaying: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
-    paused: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30',
-  }[playbackState.mode];
-
-  const handlePause = () => {
-    onPlaybackStateChange({ ...playbackState, mode: 'paused' });
-  };
-  const handleResume = () => {
-    onPlaybackStateChange({ ...playbackState, mode: 'displaying' });
-  };
-  const handleApply = () => {
-    if (!previewAsset) return;
-    onPlaybackStateChange({
-      ...playbackState,
-      mode: 'displaying',
-      active_asset_id: previewAsset.id,
-      preview_asset_id: null,
-      preview_queue_item_id: null,
-      last_rendered_url: previewAsset.original_url,
-      display_started_at: new Date().toISOString(),
-    });
+    preview:
+      'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+    displaying:
+      'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+    paused:
+      'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30',
   };
 
   return (
     <div className="flex flex-col h-full">
-      {/* Display area */}
       <div className="relative mx-4 mt-3 mb-2 rounded-xl overflow-hidden bg-black/90 shadow-lg shadow-black/20">
-        {/* Aspect ratio container matching Inky 800x480 */}
         <div className="relative w-full" style={{ paddingBottom: '60%' }}>
           {isIdle ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white/40 gap-2">
@@ -123,13 +141,13 @@ export default function NowPlaying({
                 <Play className="w-5 h-5 ml-0.5" />
               </div>
               <span className="text-sm font-medium">No image displayed</span>
-              <span className="text-xs text-white/25">Add images to the queue to get started</span>
+              <span className="text-xs text-white/25">
+                Add images to the queue to get started
+              </span>
             </div>
           ) : (
             <>
-              {!imageLoaded && (
-                <div className="absolute inset-0 animate-shimmer rounded-xl" />
-              )}
+              {!imageLoaded && <div className="absolute inset-0 animate-shimmer rounded-xl" />}
               <img
                 src={displayedUrl || ''}
                 alt={displayedAsset?.filename_original || 'Display'}
@@ -141,19 +159,17 @@ export default function NowPlaying({
             </>
           )}
 
-          {/* Status badge overlay */}
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${modeColor}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${modeColor[playbackState.mode]}`}
             >
               {playbackState.mode === 'displaying' && (
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
               )}
-              {modeLabel}
+              {modeLabel[playbackState.mode]}
             </span>
           </div>
 
-          {/* Preview overlay indicator */}
           {isPreview && (
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-amber-950/80 to-transparent p-3 pt-8">
               <div className="flex items-center justify-between">
@@ -165,7 +181,7 @@ export default function NowPlaying({
                 </div>
                 <Button
                   size="sm"
-                  onClick={handleApply}
+                  onClick={onApply}
                   className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs h-7 px-3"
                 >
                   <Send className="w-3 h-3 mr-1" />
@@ -177,9 +193,7 @@ export default function NowPlaying({
         </div>
       </div>
 
-      {/* Info section */}
       <div className="px-4 py-2 flex-1 overflow-auto">
-        {/* Current image info */}
         <div className="flex items-start justify-between mb-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold truncate">
@@ -199,15 +213,12 @@ export default function NowPlaying({
           )}
         </div>
 
-        {/* Timeout & settings row */}
         {!isIdle && (
           <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center gap-2 text-sm">
               <div className="flex items-center gap-1 text-muted-foreground">
                 <Clock className="w-3.5 h-3.5" />
-                <span className="text-mono text-xs">
-                  {formatTimeout(timeRemaining)}
-                </span>
+                <span className="text-mono text-xs">{formatTimeout(timeRemaining)}</span>
               </div>
               <span className="text-muted-foreground/40">·</span>
               <span className="text-xs text-muted-foreground">
@@ -236,7 +247,6 @@ export default function NowPlaying({
 
         <Separator className="mb-4" />
 
-        {/* Queue position indicator */}
         {!isIdle && queue.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
@@ -244,7 +254,7 @@ export default function NowPlaying({
                 Queue Position
               </span>
               <span className="text-xs text-muted-foreground">
-                {(activeQueueItem ? activeQueueItem.position + 1 : 0)} of {queue.length}
+                {activeQueueItem ? activeQueueItem.position + 1 : 0} of {queue.length}
               </span>
             </div>
             <div className="flex gap-1">
@@ -255,8 +265,8 @@ export default function NowPlaying({
                     item.id === playbackState.active_queue_item_id
                       ? 'bg-primary'
                       : item.enabled
-                      ? 'bg-muted-foreground/20'
-                      : 'bg-muted-foreground/8'
+                        ? 'bg-muted-foreground/20'
+                        : 'bg-muted-foreground/8'
                   }`}
                 />
               ))}
@@ -264,7 +274,6 @@ export default function NowPlaying({
           </div>
         )}
 
-        {/* Up next preview */}
         {!isIdle && queue.length > 1 && activeQueueItem && (
           <div className="mb-3">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -272,19 +281,24 @@ export default function NowPlaying({
             </span>
             {(() => {
               const nextIndex = (activeQueueItem.position + 1) % queue.length;
-              const nextItem = queue.find((q) => q.position === nextIndex);
+              const nextItem = queue.find((item) => item.position === nextIndex);
               if (!nextItem) return null;
               return (
                 <div className="flex items-center gap-3 mt-2 p-2 rounded-lg bg-card/60">
                   <img
-                    src={nextItem.asset.thumbnail_url}
+                    src={nextItem.asset.thumbnail_url || nextItem.asset.original_url}
                     alt={nextItem.asset.filename_original}
                     className="w-10 h-10 rounded object-cover flex-shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{nextItem.asset.filename_original}</p>
+                    <p className="text-sm font-medium truncate">
+                      {nextItem.asset.filename_original}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {nextItem.fit_mode} · {nextItem.timeout_seconds_override ? formatTimeout(nextItem.timeout_seconds_override) : 'Default timeout'}
+                      {nextItem.fit_mode} ·{' '}
+                      {nextItem.timeout_seconds_override
+                        ? formatTimeout(nextItem.timeout_seconds_override)
+                        : 'Default timeout'}
                     </p>
                   </div>
                 </div>
@@ -294,7 +308,6 @@ export default function NowPlaying({
         )}
       </div>
 
-      {/* Playback controls bar */}
       <div className="px-4 pb-3 pt-1">
         <div className="flex items-center justify-center gap-2">
           <Button
@@ -302,6 +315,8 @@ export default function NowPlaying({
             size="icon"
             className="h-11 w-11 rounded-full"
             id="btn-previous"
+            onClick={onPrevious}
+            disabled={!hasQueue}
           >
             <SkipBack className="w-5 h-5" />
           </Button>
@@ -310,15 +325,26 @@ export default function NowPlaying({
             size="icon"
             className="h-11 w-11 rounded-full"
             id="btn-preview-prev"
+            onClick={() => onPreviewDirection('previous')}
+            disabled={!hasQueue}
           >
             <ChevronLeft className="w-5 h-5" />
           </Button>
 
-          {isPaused ? (
+          {isIdle ? (
             <Button
               size="icon"
               className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
-              onClick={handleResume}
+              id="btn-play"
+              disabled
+            >
+              <Play className="w-6 h-6 ml-0.5" />
+            </Button>
+          ) : isPaused ? (
+            <Button
+              size="icon"
+              className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+              onClick={onResume}
               id="btn-play"
             >
               <Play className="w-6 h-6 ml-0.5" />
@@ -327,7 +353,7 @@ export default function NowPlaying({
             <Button
               size="icon"
               className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
-              onClick={handlePause}
+              onClick={onPause}
               id="btn-pause"
             >
               <Pause className="w-6 h-6" />
@@ -339,6 +365,8 @@ export default function NowPlaying({
             size="icon"
             className="h-11 w-11 rounded-full"
             id="btn-preview-next"
+            onClick={() => onPreviewDirection('next')}
+            disabled={!hasQueue}
           >
             <ChevronRight className="w-5 h-5" />
           </Button>
@@ -347,6 +375,8 @@ export default function NowPlaying({
             size="icon"
             className="h-11 w-11 rounded-full"
             id="btn-next"
+            onClick={onNext}
+            disabled={!hasQueue}
           >
             <SkipForward className="w-5 h-5" />
           </Button>

@@ -2,16 +2,14 @@ import shutil
 from pathlib import Path
 from werkzeug.utils import secure_filename
 
-from utils.paths import SRC_DIR
-
 
 class MediaStore:
-    def __init__(self):
-        self.data_dir = SRC_DIR / "data"
+    def __init__(self, data_dir: Path, current_image_path: Path):
+        self.data_dir = Path(data_dir)
         self.media_dir = self.data_dir / "media"
         self.originals_dir = self.media_dir / "originals"
         self.thumbnails_dir = self.media_dir / "thumbnails"
-        self.current_image_path = SRC_DIR / "static" / "images" / "current_image.png"
+        self.current_image_path = Path(current_image_path)
         self.ensure_directories()
 
     def ensure_directories(self):
@@ -52,4 +50,3 @@ class MediaStore:
     def delete_asset_files(self, asset_id: str):
         shutil.rmtree(self.original_dir(asset_id), ignore_errors=True)
         shutil.rmtree(self.thumbnails_dir_for_asset(asset_id), ignore_errors=True)
-

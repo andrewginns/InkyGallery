@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ChangeEvent, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,14 @@ interface LibraryProps {
   assets: Asset[];
   onPreview: (assetId: string) => void;
   onAddToQueue: (assetIds: string[]) => void;
+  onUpload: (
+    files: File[],
+    options: { duplicatePolicy: 'reject' | 'reuse_existing' | 'keep_both'; autoAddToQueue: boolean }
+  ) => void;
+  onToggleFavorite: (asset: Asset) => void;
+  onSaveCaption: (asset: Asset, caption: string | null) => void;
+  onDelete: (assetIds: string[]) => void;
+  busy?: boolean;
 }
 
 function formatFileSize(bytes: number): string {
@@ -60,7 +68,16 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export default function Library({ assets, onPreview, onAddToQueue }: LibraryProps) {
+export default function Library({
+  assets,
+  onPreview,
+  onAddToQueue,
+  onUpload,
+  onToggleFavorite,
+  onSaveCaption,
+  onDelete,
+  busy = false,
+}: LibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState('uploaded_newest');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -68,6 +85,10 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
   const [selectionMode, setSelectionMode] = useState(false);
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [duplicatePolicy, setDuplicatePolicy] = useState<'reject' | 'reuse_existing' | 'keep_both'>('reuse_existing');
+  const [autoAddToQueue, setAutoAddToQueue] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const filteredAssets = assets
     .filter((a) => {
@@ -76,7 +97,7 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
         const q = searchQuery.toLowerCase();
         return (
           a.filename_original.toLowerCase().includes(q) ||
-          a.caption.toLowerCase().includes(q)
+          (a.caption ?? '').toLowerCase().includes(q)
         );
       }
       return true;
@@ -104,6 +125,45 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
   const clearSelection = () => {
     setSelectedIds(new Set());
     setSelectionMode(false);
+  };
+
+  const handleDelete = (assetIds: string[]) => {
+    if (assetIds.length === 0) {
+      return;
+    }
+    const confirmed = window.confirm(
+      assetIds.length === 1
+        ? 'Delete this image from the library and queue?'
+        : `Delete ${assetIds.length} images from the library and queue?`
+    );
+    if (!confirmed) {
+      return;
+    }
+    onDelete(assetIds);
+    if (detailAsset && assetIds.includes(detailAsset.id)) {
+      setDetailAsset(null);
+    }
+    clearSelection();
+  };
+
+  const handleChooseFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setPendingFiles(files);
+  };
+
+  const handleSubmitUpload = () => {
+    if (pendingFiles.length === 0) {
+      fileInputRef.current?.click();
+      return;
+    }
+    onUpload(pendingFiles, { duplicatePolicy, autoAddToQueue });
+    setPendingFiles([]);
+    setAutoAddToQueue(false);
+    setDuplicatePolicy('reuse_existing');
+    setShowUploadDialog(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -174,6 +234,7 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
                 className="h-8 text-xs px-3 rounded-lg gap-1.5"
                 onClick={() => setShowUploadDialog(true)}
                 id="btn-upload"
+                disabled={busy}
               >
                 <Upload className="w-3.5 h-3.5" />
                 Upload
@@ -208,6 +269,7 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
               onAddToQueue(Array.from(selectedIds));
               clearSelection();
             }}
+            disabled={busy}
           >
             <ListPlus className="w-3.5 h-3.5" />
             Add to Queue
@@ -217,6 +279,8 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
             size="sm"
             variant="ghost"
             className="h-7 text-xs gap-1 rounded-lg text-destructive hover:text-destructive"
+            onClick={() => handleDelete(Array.from(selectedIds))}
+            disabled={busy}
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete
@@ -287,7 +351,7 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
                   id={`asset-${asset.id}`}
                 >
                   <img
-                    src={asset.thumbnail_url}
+                    src={asset.thumbnail_url || asset.original_url}
                     alt={asset.filename_original}
                     className="w-full h-full object-cover"
                     loading="lazy"
@@ -419,6 +483,12 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
                     variant="ghost"
                     size="sm"
                     className="flex-1 h-8 text-xs gap-1.5"
+                    onClick={() => {
+                      const updatedAsset = { ...detailAsset, favorite: !detailAsset.favorite };
+                      setDetailAsset(updatedAsset);
+                      onToggleFavorite(detailAsset);
+                    }}
+                    disabled={busy}
                   >
                     <Heart className="w-3.5 h-3.5" />
                     {detailAsset.favorite ? 'Unfavorite' : 'Favorite'}
@@ -427,6 +497,18 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
                     variant="ghost"
                     size="sm"
                     className="flex-1 h-8 text-xs gap-1.5"
+                    onClick={() => {
+                      const nextCaption = window.prompt(
+                        `Caption for ${detailAsset.filename_original}`,
+                        detailAsset.caption || ''
+                      );
+                      if (nextCaption === null) {
+                        return;
+                      }
+                      setDetailAsset({ ...detailAsset, caption: nextCaption.trim() || null });
+                      onSaveCaption(detailAsset, nextCaption.trim() || null);
+                    }}
+                    disabled={busy}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     Edit Caption
@@ -435,6 +517,8 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
                     variant="ghost"
                     size="sm"
                     className="h-8 text-xs gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete([detailAsset.id])}
+                    disabled={busy}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -453,24 +537,49 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
           </DialogHeader>
           <div className="space-y-4">
             {/* Drop zone */}
-            <div className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-accent/30 transition-colors">
+            <button
+              type="button"
+              className="w-full border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-accent/30 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+            >
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <Upload className="w-5 h-5 text-primary" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium">Tap to choose files</p>
+                <p className="text-sm font-medium">
+                  {pendingFiles.length > 0 ? `${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'} selected` : 'Tap to choose files'}
+                </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   PNG, JPG, WEBP, HEIC up to 20MB each
                 </p>
               </div>
-            </div>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif"
+              multiple
+              className="hidden"
+              onChange={handleChooseFiles}
+            />
+
+            {pendingFiles.length > 0 && (
+              <div className="rounded-xl border border-border/60 bg-card px-3 py-2 text-xs text-muted-foreground max-h-28 overflow-auto">
+                {pendingFiles.map((file) => (
+                  <p key={`${file.name}-${file.lastModified}`} className="truncate">
+                    {file.name}
+                  </p>
+                ))}
+              </div>
+            )}
 
             {/* Duplicate handling */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
                 If duplicates found
               </label>
-              <Select defaultValue="reuse_existing">
+              <Select value={duplicatePolicy} onValueChange={(value) => setDuplicatePolicy(value as 'reject' | 'reuse_existing' | 'keep_both')}>
                 <SelectTrigger className="h-9 text-sm rounded-lg">
                   <SelectValue />
                 </SelectTrigger>
@@ -484,7 +593,12 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
 
             {/* Auto-add to queue */}
             <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" className="w-4 h-4 rounded accent-primary" />
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded accent-primary"
+                checked={autoAddToQueue}
+                onChange={(event) => setAutoAddToQueue(event.target.checked)}
+              />
               <div>
                 <p className="text-sm font-medium">Auto-add to queue</p>
                 <p className="text-xs text-muted-foreground">
@@ -493,9 +607,14 @@ export default function Library({ assets, onPreview, onAddToQueue }: LibraryProp
               </div>
             </label>
 
-            <Button className="w-full h-10 rounded-xl gap-2" id="btn-upload-submit">
+            <Button
+              className="w-full h-10 rounded-xl gap-2"
+              id="btn-upload-submit"
+              onClick={handleSubmitUpload}
+              disabled={busy}
+            >
               <Upload className="w-4 h-4" />
-              Upload Files
+              {pendingFiles.length > 0 ? 'Upload Files' : 'Choose Files'}
             </Button>
           </div>
         </DialogContent>

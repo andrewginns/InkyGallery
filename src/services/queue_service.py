@@ -104,5 +104,6 @@ class QueueService:
                 "id": item["asset_id"],
                 "filename_original": item["filename_original"],
                 "thumbnail_url": f"/api/assets/{item['asset_id']}/thumbnail?size=sm",
+                "original_url": f"/api/assets/{item['asset_id']}/file",
             },
         }

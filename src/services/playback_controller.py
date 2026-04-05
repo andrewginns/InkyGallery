@@ -29,6 +29,12 @@ class PlaybackController:
 
     def get_payload(self):
         state = self.playback_repo.get_state()
+        state = {
+            **state,
+            "current_image_url": "/api/current-image",
+            "last_rendered_url": "/api/current-image" if state.get("last_rendered_at") else None,
+            "time_remaining_seconds": self._time_remaining_seconds(state.get("display_expires_at")),
+        }
         return {
             "settings": self.playback_repo.get_settings(),
             "state": state,
@@ -144,7 +150,55 @@ class PlaybackController:
             "current_image_hash": state.get("last_image_hash"),
             "last_rendered_at": state.get("last_rendered_at"),
             "default_timeout_seconds": settings.get("default_timeout_seconds"),
+            "time_remaining_seconds": self._time_remaining_seconds(state.get("display_expires_at")),
+            "hardware": self.display_service.display_manager.get_status(),
         }
+
+    def reconcile_state(self):
+        with self.lock:
+            state = self.playback_repo.get_state()
+            updates = {}
+
+            active_queue_item_id = state.get("active_queue_item_id")
+            if active_queue_item_id and not self.queue_repo.get_item(active_queue_item_id):
+                updates["active_queue_item_id"] = None
+
+            preview_queue_item_id = state.get("preview_queue_item_id")
+            if preview_queue_item_id and not self.queue_repo.get_item(preview_queue_item_id):
+                updates["preview_queue_item_id"] = None
+
+            active_asset_id = state.get("active_asset_id")
+            if active_asset_id and not self.display_service.assets_repo.get_asset(active_asset_id):
+                updates["active_asset_id"] = None
+                updates["active_queue_item_id"] = None
+                updates["display_started_at"] = None
+                updates["display_expires_at"] = None
+
+            preview_asset_id = state.get("preview_asset_id")
+            if preview_asset_id and not self.display_service.assets_repo.get_asset(preview_asset_id):
+                updates["preview_asset_id"] = None
+                updates["preview_queue_item_id"] = None
+
+            resolved_preview_asset_id = updates.get("preview_asset_id", preview_asset_id)
+            resolved_active_asset_id = updates.get("active_asset_id", active_asset_id)
+            resolved_mode = state.get("mode")
+
+            if resolved_preview_asset_id:
+                resolved_mode = "preview"
+            elif resolved_active_asset_id:
+                resolved_mode = "paused" if state.get("mode") == "paused" else "displaying"
+            else:
+                resolved_mode = "idle"
+                updates["display_started_at"] = None
+                updates["display_expires_at"] = None
+
+            if resolved_mode != state.get("mode"):
+                updates["mode"] = resolved_mode
+
+            if updates:
+                updates["updated_at"] = utcnow_iso()
+                return self.playback_repo.update_state(updates)
+            return state
 
     def _commit_direction(self, direction: str):
         with self.lock:
@@ -234,6 +288,13 @@ class PlaybackController:
 
     def _future_iso(self, now: datetime, timeout_seconds: int) -> str:
         return datetime.fromtimestamp(now.timestamp() + timeout_seconds, tz=timezone.utc).isoformat()
+
+    def _time_remaining_seconds(self, expires_at_iso: str | None):
+        if not expires_at_iso:
+            return None
+        expires_at = datetime.fromisoformat(expires_at_iso)
+        remaining = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+        return max(0, remaining)
 
     def _run_loop(self):
         while not self.stop_event.is_set():
