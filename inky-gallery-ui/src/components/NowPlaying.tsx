@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -58,6 +58,7 @@ export default function NowPlaying({
   onPreviewDirection,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const loadedImageUrlsRef = useRef<Set<string>>(new Set());
   const [timeRemaining, setTimeRemaining] = useState(
     playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
   );
@@ -112,7 +113,11 @@ export default function NowPlaying({
   ]);
 
   useEffect(() => {
-    setImageLoaded(false);
+    if (!displayedUrl) {
+      setImageLoaded(false);
+      return;
+    }
+    setImageLoaded(loadedImageUrlsRef.current.has(displayedUrl));
   }, [displayedUrl]);
 
   const modeLabel: Record<PlaybackState['mode'], string> = {
@@ -157,7 +162,16 @@ export default function NowPlaying({
                 } ${
                   imageLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
-                onLoad={() => setImageLoaded(true)}
+                onLoad={(event) => {
+                  if (event.currentTarget.currentSrc) {
+                    loadedImageUrlsRef.current.add(event.currentTarget.currentSrc);
+                  }
+                  if (displayedUrl) {
+                    loadedImageUrlsRef.current.add(displayedUrl);
+                  }
+                  setImageLoaded(true);
+                }}
+                onError={() => setImageLoaded(true)}
               />
               {isRendering && imageLoaded && (
                 <div className="absolute inset-0 animate-rendering-overlay pointer-events-none">
