@@ -30,11 +30,15 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { DeviceSettings, PlaybackSettings } from '@/data/types';
+import type { ResolvedTheme, ThemePreference } from '@/lib/theme';
 
 interface SettingsProps {
   deviceSettings: DeviceSettings;
   playbackSettings: PlaybackSettings;
   onSave: (deviceSettings: DeviceSettings, playbackSettings: PlaybackSettings) => void;
+  themePreference: ThemePreference;
+  resolvedTheme: ResolvedTheme;
+  onThemePreferenceChange: (themePreference: ThemePreference) => void;
   saving?: boolean;
 }
 
@@ -42,6 +46,9 @@ export default function Settings({
   deviceSettings,
   playbackSettings,
   onSave,
+  themePreference,
+  resolvedTheme,
+  onThemePreferenceChange,
   saving = false,
 }: SettingsProps) {
   const [localDevice, setLocalDevice] = useState(deviceSettings);
@@ -174,6 +181,50 @@ export default function Settings({
                 onCheckedChange={(v: boolean) => updatePlayback({ auto_advance_enabled: v })}
                 id="toggle-auto-advance"
               />
+            </div>
+          </div>
+        </section>
+
+        {/* Appearance */}
+        <section className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Palette className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold">Appearance</h3>
+          </div>
+
+          <div className="space-y-4 bg-card rounded-xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label className="text-sm flex items-center gap-2">
+                  <Palette className="w-3.5 h-3.5 text-muted-foreground" />
+                  Theme
+                </Label>
+                <p className="text-xs text-muted-foreground ml-5.5 mt-0.5">
+                  Applies to this browser immediately
+                </p>
+              </div>
+              <Select
+                value={themePreference}
+                onValueChange={(value: string) =>
+                  onThemePreferenceChange(value as ThemePreference)
+                }
+              >
+                <SelectTrigger className="h-8 w-28 text-sm rounded-lg" id="select-theme">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Currently using</span>
+              <Badge variant="secondary" className="text-xs">
+                {resolvedTheme === 'dark' ? 'Dark mode' : 'Light mode'}
+              </Badge>
             </div>
           </div>
         </section>

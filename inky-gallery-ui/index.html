@@ -1,13 +1,37 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-    <meta name="theme-color" content="#141417" />
+    <meta name="theme-color" content="#f6efe5" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="InkyGallery — Manage your Inky e-ink display with a beautiful mobile interface" />
     <title>InkyGallery</title>
+    <script>
+      (() => {
+        const storageKey = 'inkygallery-theme-preference';
+        const root = document.documentElement;
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        const stored = localStorage.getItem(storageKey);
+        const preference =
+          stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+        const resolved =
+          preference === 'system'
+            ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+            : preference;
+
+        root.dataset.themePreference = preference;
+        root.classList.toggle('dark', resolved === 'dark');
+        root.style.colorScheme = resolved;
+        if (themeMeta) {
+          themeMeta.setAttribute('content', resolved === 'dark' ? '#141417' : '#f6efe5');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

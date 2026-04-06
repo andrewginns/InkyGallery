@@ -16,6 +16,7 @@ import {
   getEffectiveCropProfile,
   getPreviewAspectRatio,
 } from '@/lib/crop';
+import { derivePlaybackView } from '@/lib/playback-view';
 
 interface NowPlayingProps {
   playbackState: PlaybackState;
@@ -85,19 +86,18 @@ export default function NowPlaying({
     playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
   );
 
-  const activeAsset = assets.find((asset) => asset.id === playbackState.active_asset_id) || null;
-  const previewAsset = assets.find((asset) => asset.id === playbackState.preview_asset_id) || null;
-  const activeQueueItem = queue.find((item) => item.id === playbackState.active_queue_item_id) || null;
-  const previewQueueItem = queue.find((item) => item.id === playbackState.preview_queue_item_id) || null;
-
-  const displayedAsset = previewAsset || activeAsset;
+  const {
+    activeAsset,
+    previewAsset,
+    displayedAsset,
+    liveQueueItem,
+    selectedQueueItem,
+  } = derivePlaybackView(playbackState, queue, assets);
   const displayedUrl =
     previewAsset?.original_url ||
     activeAsset?.original_url ||
     playbackState.current_image_url ||
     playbackState.last_rendered_url;
-  const liveQueueItem = activeQueueItem;
-  const selectedQueueItem = previewQueueItem || liveQueueItem;
   const selectedFitMode = selectedQueueItem?.fit_mode ?? 'cover';
   const previewAspectRatio = getPreviewAspectRatio(deviceSettings);
   const displayedCrop =
@@ -114,7 +114,7 @@ export default function NowPlaying({
   const isIdle = effectiveMode === 'idle';
   const hasQueue = queue.length > 0;
   const effectiveTimeout =
-    activeQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
+    liveQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
   const selectedTimeout =
     selectedQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
 
@@ -378,7 +378,7 @@ export default function NowPlaying({
               </div>
               <span className="text-muted-foreground/40">·</span>
               <span className="text-xs text-muted-foreground">
-                {activeQueueItem?.timeout_seconds_override
+                {liveQueueItem?.timeout_seconds_override
                   ? 'Item override'
                   : `Default ${formatTimeout(playbackSettings.default_timeout_seconds)}`}
               </span>

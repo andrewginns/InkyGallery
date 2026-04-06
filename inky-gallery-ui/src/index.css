@@ -6,24 +6,24 @@
 
 @layer base {
   :root {
-    --background: 30 15% 97%;
-    --foreground: 30 10% 10%;
-    --card: 30 12% 95%;
-    --card-foreground: 30 10% 10%;
-    --popover: 30 12% 95%;
-    --popover-foreground: 30 10% 10%;
+    --background: 34 34% 95%;
+    --foreground: 28 16% 12%;
+    --card: 34 24% 98%;
+    --card-foreground: 28 16% 12%;
+    --popover: 34 24% 98%;
+    --popover-foreground: 28 16% 12%;
     --primary: 28 80% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 30 10% 90%;
-    --secondary-foreground: 30 10% 20%;
-    --muted: 30 8% 92%;
-    --muted-foreground: 30 6% 50%;
-    --accent: 28 70% 94%;
-    --accent-foreground: 28 80% 30%;
+    --secondary: 32 18% 90%;
+    --secondary-foreground: 28 14% 20%;
+    --muted: 32 20% 92%;
+    --muted-foreground: 28 10% 40%;
+    --accent: 28 72% 92%;
+    --accent-foreground: 28 64% 26%;
     --destructive: 4 72% 56%;
     --destructive-foreground: 0 0% 100%;
-    --border: 30 10% 88%;
-    --input: 30 10% 88%;
+    --border: 30 18% 83%;
+    --input: 30 18% 83%;
     --ring: 28 80% 52%;
     --radius: 0.625rem;
     --success: 152 56% 42%;
@@ -33,24 +33,24 @@
   }
 
   .dark {
-    --background: 220 14% 8%;
+    --background: 222 14% 9%;
     --foreground: 30 8% 92%;
-    --card: 220 12% 11%;
+    --card: 222 11% 12%;
     --card-foreground: 30 8% 92%;
-    --popover: 220 12% 11%;
+    --popover: 222 11% 12%;
     --popover-foreground: 30 8% 92%;
     --primary: 28 80% 55%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 10% 16%;
+    --secondary: 222 8% 17%;
     --secondary-foreground: 30 8% 85%;
-    --muted: 220 10% 14%;
-    --muted-foreground: 220 6% 52%;
-    --accent: 28 40% 16%;
+    --muted: 222 9% 15%;
+    --muted-foreground: 220 6% 58%;
+    --accent: 28 36% 18%;
     --accent-foreground: 28 70% 72%;
     --destructive: 4 62% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 10% 16%;
-    --input: 220 10% 18%;
+    --border: 222 9% 18%;
+    --input: 222 9% 19%;
     --ring: 28 80% 55%;
     --success: 152 56% 38%;
     --success-foreground: 0 0% 100%;
