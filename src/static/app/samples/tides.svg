@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200">
+  <defs>
+    <linearGradient id="tides-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5d4a8"/>
+      <stop offset="100%" stop-color="#f7f0e1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#tides-sky)"/>
+  <circle cx="824" cy="244" r="94" fill="#f7e7c6"/>
+  <path d="M0 536 C132 484 246 476 386 512 C510 544 620 622 752 620 C904 618 1032 542 1200 498 L1200 1200 L0 1200 Z" fill="#6e9088"/>
+  <path d="M0 664 C142 616 302 624 438 672 C564 716 670 796 824 792 C962 788 1084 730 1200 682 L1200 1200 L0 1200 Z" fill="#51727a"/>
+  <path d="M0 792 C166 738 334 760 498 818 C646 872 790 922 1200 820 L1200 1200 L0 1200 Z" fill="#314f5b"/>
+  <path d="M0 578 C160 528 302 530 432 560 C582 592 706 654 846 654 C988 654 1098 610 1200 568" fill="none" stroke="#f7f0e1" stroke-width="18" opacity="0.36"/>
+  <path d="M0 706 C174 656 332 664 474 706 C612 748 756 814 886 814 C1000 814 1092 786 1200 732" fill="none" stroke="#f7f0e1" stroke-width="18" opacity="0.24"/>
+  <ellipse cx="244" cy="924" rx="132" ry="48" fill="#f4e7cf" opacity="0.14"/>
+  <ellipse cx="684" cy="1002" rx="182" ry="54" fill="#f4e7cf" opacity="0.12"/>
+</svg>

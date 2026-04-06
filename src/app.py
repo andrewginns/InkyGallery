@@ -19,6 +19,7 @@ except ImportError:  # pragma: no cover - optional dependency during local boots
 
 from api.assets import create_assets_blueprint
 from api.device import create_device_blueprint
+from api.openapi import create_openapi_blueprint
 from api.playback import create_playback_blueprint
 from api.queue import create_queue_blueprint
 from display.display_manager import DisplayManager
@@ -151,6 +152,7 @@ def create_app():
     app.register_blueprint(create_queue_blueprint(queue_service, playback_controller))
     app.register_blueprint(create_playback_blueprint(playback_controller))
     app.register_blueprint(create_device_blueprint(device_settings_service, playback_controller, media_store))
+    app.register_blueprint(create_openapi_blueprint())
 
     @app.before_request
     def reject_untrusted_hosts():

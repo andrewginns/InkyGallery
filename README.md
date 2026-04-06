@@ -1,15 +1,8 @@
 # InkyGallery
 
-InkyGallery is a local-network image library and playback controller for Pimoroni Inky e-ink displays. It gives you a mobile-first web UI for uploads, queue management, preview/apply flows, persistent crop editing, and device tuning.
+InkyGallery is a local-network image library and playback controller for the [Pimoroni Inky Impression](https://shop.pimoroni.com/products/inky-impression?variant=55186435244411) e-ink display. It gives you a mobile-first web UI for uploads, queue management, preview/apply flows, persistent crop editing, and device tuning. The webapp ships with full PWA support, including an installable manifest, homescreen icons, standalone display mode, and a service-worker-cached app shell.
 
-<p>
-  <img src="docs/readme/now-playing.png" alt="Now Playing view" width="230" />
-  <img src="docs/readme/library.png" alt="Library view" width="230" />
-</p>
-<p>
-  <img src="docs/readme/queue.png" alt="Queue view" width="230" />
-  <img src="docs/readme/settings.png" alt="Settings view" width="230" />
-</p>
+![InkyGallery UI showcase](docs/readme/showcase.png)
 
 The repo includes:
 
@@ -37,8 +30,10 @@ cd ..
 uv run python run.py
 ```
 
-The app serves the UI and API from the same process on `http://localhost:8080` by default.
+The app serves the UI and API from the same process on `http://localhost:8080` by default. When you open it from a phone on the same network, it can be installed like a native app and launched in standalone PWA mode.
 
 ## Attribution
 
 InkyGallery is inspired by [InkyPi](https://github.com/fatihak/InkyPi). Parts of the backend image-loading and Inky hardware communication path were copied or adapted from that codebase.
+
+Built by Codex ❤️

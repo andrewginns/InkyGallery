@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="archipelago-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6d6a8"/>
+      <stop offset="52%" stop-color="#f4e7d2"/>
+      <stop offset="100%" stop-color="#d9e5de"/>
+    </linearGradient>
+    <linearGradient id="archipelago-water" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#87a9a0"/>
+      <stop offset="100%" stop-color="#4f6970"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#archipelago-sky)"/>
+  <circle cx="936" cy="154" r="64" fill="#f8f0d4" opacity="0.94"/>
+  <path d="M0 427 L146 294 L284 346 L434 248 L579 356 L714 296 L845 378 L1006 266 L1200 356 L1200 800 L0 800 Z" fill="#5a725d"/>
+  <path d="M0 517 C151 474 282 476 420 491 C570 509 703 579 858 564 C1008 551 1092 502 1200 462 L1200 800 L0 800 Z" fill="url(#archipelago-water)"/>
+  <ellipse cx="196" cy="550" rx="112" ry="34" fill="#dbe7e3" opacity="0.3"/>
+  <ellipse cx="534" cy="582" rx="134" ry="36" fill="#dbe7e3" opacity="0.26"/>
+  <ellipse cx="924" cy="552" rx="148" ry="32" fill="#dbe7e3" opacity="0.24"/>
+  <path d="M242 472 C289 438 338 438 387 472 C334 502 291 501 242 472 Z" fill="#6e5840"/>
+  <path d="M750 492 C803 446 868 447 930 492 C867 528 810 531 750 492 Z" fill="#715a42"/>
+</svg>

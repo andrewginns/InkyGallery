@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">
+  <rect width="1200" height="1600" fill="#f5ecd9"/>
+  <g transform="translate(112 178)">
+    <rect width="976" height="1244" rx="54" fill="#fffaf0"/>
+    <circle cx="266" cy="282" r="174" fill="#f0b554"/>
+    <circle cx="704" cy="238" r="144" fill="#e29247"/>
+    <circle cx="504" cy="632" r="194" fill="#d96b4a"/>
+    <circle cx="750" cy="904" r="162" fill="#f0b554"/>
+    <circle cx="282" cy="972" r="154" fill="#efc66b"/>
+    <circle cx="470" cy="320" r="44" fill="#fff3cc"/>
+    <circle cx="760" cy="218" r="36" fill="#fff3cc"/>
+    <circle cx="518" cy="642" r="52" fill="#ffd7a2"/>
+    <circle cx="292" cy="986" r="40" fill="#fff2c9"/>
+    <circle cx="770" cy="916" r="42" fill="#fff3cc"/>
+    <path d="M222 108 C272 60 324 48 388 70 C344 126 286 152 222 108 Z" fill="#79905c"/>
+    <path d="M662 84 C708 38 770 20 834 42 C784 108 726 132 662 84 Z" fill="#79905c"/>
+    <path d="M428 474 C474 412 548 388 626 412 C578 488 512 516 428 474 Z" fill="#6e8758"/>
+    <path d="M174 760 C242 720 308 716 378 746 C318 806 252 820 174 760 Z" fill="#809660"/>
+  </g>
+</svg>

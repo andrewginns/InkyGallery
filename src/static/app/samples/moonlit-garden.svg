@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">
+  <defs>
+    <linearGradient id="garden-night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#243042"/>
+      <stop offset="100%" stop-color="#0f1823"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1600" fill="url(#garden-night)"/>
+  <circle cx="930" cy="226" r="118" fill="#f3ead1"/>
+  <path d="M0 1180 C184 1048 384 1068 568 1174 C723 1263 843 1310 1200 1186 L1200 1600 L0 1600 Z" fill="#12222f"/>
+  <path d="M0 1322 C174 1238 369 1224 552 1289 C765 1364 944 1396 1200 1328 L1200 1600 L0 1600 Z" fill="#173346"/>
+  <g fill="#d8875e">
+    <ellipse cx="287" cy="920" rx="96" ry="182"/>
+    <ellipse cx="470" cy="802" rx="76" ry="152"/>
+    <ellipse cx="676" cy="934" rx="84" ry="176"/>
+    <ellipse cx="862" cy="838" rx="94" ry="194"/>
+  </g>
+  <g fill="#efb574">
+    <ellipse cx="351" cy="888" rx="54" ry="122"/>
+    <ellipse cx="535" cy="758" rx="44" ry="102"/>
+    <ellipse cx="732" cy="902" rx="52" ry="114"/>
+    <ellipse cx="920" cy="794" rx="56" ry="124"/>
+  </g>
+  <g fill="none" stroke="#6a876a" stroke-linecap="round">
+    <path d="M304 1600 C300 1328 291 1120 286 1018" stroke-width="28"/>
+    <path d="M468 1600 C468 1284 470 1046 470 880" stroke-width="24"/>
+    <path d="M674 1600 C670 1360 670 1146 676 1022" stroke-width="26"/>
+    <path d="M862 1600 C858 1320 859 1128 862 988" stroke-width="28"/>
+  </g>
+  <g fill="#f7f2e3" opacity="0.8">
+    <circle cx="214" cy="268" r="5"/>
+    <circle cx="368" cy="182" r="4"/>
+    <circle cx="498" cy="308" r="3"/>
+    <circle cx="676" cy="224" r="4"/>
+    <circle cx="1062" cy="334" r="5"/>
+  </g>
+</svg>

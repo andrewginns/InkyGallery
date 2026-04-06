@@ -61,6 +61,37 @@ def test_health_and_defaults(client):
     assert display_status.json["hardware"]["hardware_ready"] is False
 
 
+def test_openapi_spec_and_swagger_ui(client):
+    spec = client.get("/api/openapi.json")
+    assert spec.status_code == 200
+    assert spec.is_json
+    assert spec.json["openapi"] == "3.0.3"
+    assert spec.json["info"]["title"] == "InkyGallery API"
+    assert "/api/assets" in spec.json["paths"]
+    assert "get" in spec.json["paths"]["/api/assets"]
+    assert "post" in spec.json["paths"]["/api/assets"]
+    assert spec.json["paths"]["/api/assets"]["get"]["parameters"][1]["schema"]["enum"] == [
+        "uploaded_newest",
+        "uploaded_oldest",
+        "name_asc",
+        "name_desc",
+    ]
+    assert spec.json["paths"]["/api/assets"]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"] == {
+        "$ref": "#/components/schemas/AssetUploadInput"
+    }
+    assert "/api/settings" in spec.json["paths"]
+    assert "/health" in spec.json["paths"]
+    assert "/api/docs" not in spec.json["paths"]
+    assert "/api/openapi.json" not in spec.json["paths"]
+
+    docs = client.get("/api/docs")
+    assert docs.status_code == 200
+    assert docs.mimetype == "text/html"
+    docs_html = docs.get_data(as_text=True)
+    assert "Swagger UI" in docs_html
+    assert "/api/openapi.json" in docs_html
+
+
 def test_verbose_health_stays_minimal_for_proxied_clients(client):
     response = client.get(
         "/health?verbose=1",

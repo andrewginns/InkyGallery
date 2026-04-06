@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">
+  <rect width="1200" height="1600" fill="#f2e9db"/>
+  <rect x="114" y="118" width="972" height="1364" rx="44" fill="#fff8ed"/>
+  <g transform="translate(162 166)">
+    <rect width="876" height="1268" fill="#eadbc6"/>
+    <rect x="0" y="0" width="292" height="422" fill="#d97b59"/>
+    <rect x="292" y="0" width="292" height="422" fill="#f2c36d"/>
+    <rect x="584" y="0" width="292" height="422" fill="#7b9075"/>
+    <rect x="0" y="422" width="292" height="422" fill="#75939f"/>
+    <rect x="292" y="422" width="292" height="422" fill="#f1e4cb"/>
+    <rect x="584" y="422" width="292" height="422" fill="#cd8a5d"/>
+    <rect x="0" y="844" width="292" height="424" fill="#f1cf8a"/>
+    <rect x="292" y="844" width="292" height="424" fill="#c9654d"/>
+    <rect x="584" y="844" width="292" height="424" fill="#5d756b"/>
+    <path d="M0 0 L292 422 L0 422 Z" fill="#f7edd8" opacity="0.34"/>
+    <path d="M584 0 L876 422 L584 422 Z" fill="#f7edd8" opacity="0.2"/>
+    <path d="M292 422 L584 844 L292 844 Z" fill="#d7b493" opacity="0.45"/>
+    <path d="M0 844 L292 1268 L0 1268 Z" fill="#fff4df" opacity="0.22"/>
+    <path d="M584 844 L876 1268 L584 1268 Z" fill="#f4e6cb" opacity="0.18"/>
+    <circle cx="438" cy="214" r="92" fill="#f6efe1" opacity="0.72"/>
+    <circle cx="146" cy="1056" r="88" fill="#f5ede1" opacity="0.64"/>
+    <circle cx="730" cy="1048" r="104" fill="#f8eedc" opacity="0.22"/>
+  </g>
+</svg>

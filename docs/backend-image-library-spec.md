@@ -128,50 +128,16 @@ Current flow:
 
 The web UI may move faster than the physical panel refresh. The backend and frontend both treat device rendering as an eventual operation rather than an instant synchronous one.
 
-## API Groups
+## API Reference
 
-### Assets
+Use the live OpenAPI document instead of relying on a handwritten route list in this file.
 
-- `GET /api/assets`
-- `POST /api/assets`
-- `GET /api/assets/:id`
-- `PATCH /api/assets/:id`
-- `DELETE /api/assets/:id`
-- `POST /api/assets/bulk-delete`
-- `GET /api/assets/:id/file`
-- `GET /api/assets/:id/thumbnail`
-- `GET /api/assets/:id/crop`
-- `PUT /api/assets/:id/crop`
-- `DELETE /api/assets/:id/crop`
+When the app is running:
 
-### Queue
+- Swagger UI: `/api/docs`
+- Raw OpenAPI JSON: `/api/openapi.json`
 
-- `GET /api/queue`
-- `POST /api/queue/items`
-- `PATCH /api/queue/items/:id`
-- `DELETE /api/queue/items/:id`
-- `POST /api/queue/reorder`
-- `POST /api/queue/sort`
-- `POST /api/queue/apply-now`
-
-### Playback
-
-- `GET /api/playback`
-- `PATCH /api/playback`
-- `POST /api/playback/preview`
-- `POST /api/playback/apply`
-- `POST /api/playback/rerender-active`
-- `POST /api/playback/next`
-- `POST /api/playback/previous`
-- `POST /api/playback/pause`
-- `POST /api/playback/resume`
-
-### Device and Display
-
-- `GET /api/device/settings`
-- `PATCH /api/device/settings`
-- `GET /api/display/status`
-- `GET /api/current-image`
+The OpenAPI document is generated from the registered Flask routes at runtime and enriched with the backend's current request validation rules. That makes it the best place to confirm the available routes and payload shapes without this document drifting out of date.
 
 ## Frontend Serving
 
