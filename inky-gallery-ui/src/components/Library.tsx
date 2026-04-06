@@ -92,7 +92,7 @@ export default function Library({
   type PendingUpload = {
     id: string;
     file: File;
-    previewUrl: string;
+    previewUrl: string | null;
   };
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,7 +106,9 @@ export default function Library({
   const [duplicatePolicy, setDuplicatePolicy] = useState<'reject' | 'reuse_existing' | 'keep_both'>('reuse_existing');
   const [autoAddToQueue, setAutoAddToQueue] = useState(true);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const [brokenPreviewIds, setBrokenPreviewIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadSelectionRequestRef = useRef(0);
 
   useEffect(() => {
     if (!detailAsset) {
@@ -123,10 +125,8 @@ export default function Library({
   }, [assets, detailAsset]);
 
   const clearPendingUploads = () => {
-    setPendingUploads((current) => {
-      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      return [];
-    });
+    setPendingUploads([]);
+    setBrokenPreviewIds(new Set());
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -190,16 +190,31 @@ export default function Library({
     clearSelection();
   };
 
-  const handleChooseFiles = (event: ChangeEvent<HTMLInputElement>) => {
+  const readPreviewDataUrl = (file: File) =>
+    new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.onabort = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+
+  const handleChooseFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    setPendingUploads((current) => {
-      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      return files.map((file) => ({
+    const requestId = uploadSelectionRequestRef.current + 1;
+    uploadSelectionRequestRef.current = requestId;
+    setBrokenPreviewIds(new Set());
+    const nextUploads = await Promise.all(
+      files.map(async (file) => ({
         id: `${file.name}-${file.lastModified}-${file.size}`,
         file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-    });
+        previewUrl: await readPreviewDataUrl(file),
+      }))
+    );
+    if (uploadSelectionRequestRef.current !== requestId) {
+      return;
+    }
+    setPendingUploads(nextUploads);
   };
 
   const handleSubmitUpload = () => {
@@ -220,13 +235,14 @@ export default function Library({
   const removePendingUpload = (uploadId: string) => {
     setPendingUploads((current) => {
       const next = current.filter((item) => item.id !== uploadId);
-      const removed = current.find((item) => item.id === uploadId);
-      if (removed) {
-        URL.revokeObjectURL(removed.previewUrl);
-      }
       if (next.length === 0 && fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      return next;
+    });
+    setBrokenPreviewIds((current) => {
+      const next = new Set(current);
+      next.delete(uploadId);
       return next;
     });
   };
@@ -715,12 +731,28 @@ export default function Library({
                         className="rounded-lg border border-border/50 bg-background/80 p-2"
                       >
                         <div className="relative aspect-[3/4] overflow-hidden rounded-md bg-muted">
-                          <img
-                            src={upload.previewUrl}
-                            alt={upload.file.name}
-                            className="h-full w-full object-cover"
-                            draggable={false}
-                          />
+                          {upload.previewUrl && !brokenPreviewIds.has(upload.id) ? (
+                            <img
+                              src={upload.previewUrl}
+                              alt={upload.file.name}
+                              className="h-full w-full object-cover"
+                              draggable={false}
+                              onError={() => {
+                                setBrokenPreviewIds((current) => {
+                                  const next = new Set(current);
+                                  next.add(upload.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/80 px-2 text-center">
+                              <ImageIcon className="h-6 w-6 text-muted-foreground/60" />
+                              <p className="line-clamp-2 text-[11px] font-medium text-muted-foreground">
+                                Preview unavailable
+                              </p>
+                            </div>
+                          )}
                           <button
                             type="button"
                             className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white transition hover:bg-black/75"
