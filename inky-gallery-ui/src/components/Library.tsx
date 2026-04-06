@@ -439,15 +439,24 @@ export default function Library({
           {detailAsset && (
             <>
               {/* Image preview */}
-              <div className="relative w-full bg-black">
-                <div style={{ aspectRatio: `${detailPreviewAspectRatio}` }} className="relative overflow-hidden">
-                  <img
-                    src={detailAsset.original_url}
-                    alt={detailAsset.filename_original}
-                    className="absolute max-w-none select-none"
-                    style={detailPreviewCrop ? cropProfileToImageStyle(detailPreviewCrop) : undefined}
-                    draggable={false}
-                  />
+              <div className="relative w-full bg-black/90" style={{ paddingBottom: '60%' }}>
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <div
+                    style={{ aspectRatio: `${detailPreviewAspectRatio}` }}
+                    className="relative h-full max-w-full overflow-hidden rounded-lg"
+                  >
+                    <img
+                      src={detailAsset.original_url}
+                      alt={detailAsset.filename_original}
+                      className={
+                        detailPreviewCrop
+                          ? 'absolute max-w-none select-none'
+                          : 'absolute inset-0 h-full w-full object-contain'
+                      }
+                      style={detailPreviewCrop ? cropProfileToImageStyle(detailPreviewCrop) : undefined}
+                      draggable={false}
+                    />
+                  </div>
                 </div>
               </div>
 
