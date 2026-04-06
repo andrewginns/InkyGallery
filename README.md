@@ -1,6 +1,6 @@
 # InkyGallery
 
-InkyGallery is a local-network image library and playback controller for Pimoroni Inky e-ink displays. It gives you a mobile-first web UI for uploading images, curating a queue, previewing changes, and applying them to the device.
+InkyGallery is a local-network image library and playback controller for Pimoroni Inky e-ink displays. It gives you a mobile-first web UI for uploads, queue management, preview/apply flows, persistent crop editing, and device tuning.
 
 <p>
   <img src="docs/readme/now-playing.png" alt="Now Playing view" width="230" />
@@ -13,9 +13,9 @@ InkyGallery is a local-network image library and playback controller for Pimoron
 
 The repo includes:
 
-- a Python backend for assets, queueing, playback state, device settings, and Inky rendering
+- a Python backend for assets, queueing, playback state, crop persistence, device settings, and Inky rendering
 - a React/Vite frontend served by the backend as a single app
-- backend and UI spec docs in [`docs/`](docs/)
+- concise current-state docs in [`docs/`](docs/)
 
 ## Run
 

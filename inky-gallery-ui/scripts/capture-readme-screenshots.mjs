@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { capture, disableMotion, seedDocsState } from './docs-screenshot-helpers.mjs';
+import { capture, disableMotion, prepareDocsPage, seedDocsState } from './docs-screenshot-helpers.mjs';
 
 const baseUrl = process.env.SCREENSHOT_URL ?? 'http://127.0.0.1:8090';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,7 @@ const context = await browser.newContext({
   hasTouch: true,
 });
 const page = await context.newPage();
+await prepareDocsPage(page);
 
 await page.goto(baseUrl, { waitUntil: 'networkidle' });
 await page.waitForSelector('#bottom-nav');

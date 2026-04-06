@@ -2,6 +2,13 @@ import { fileURLToPath } from 'node:url';
 
 export const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export async function prepareDocsPage(page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('inkygallery-theme-preference', 'light');
+  });
+  await page.emulateMedia({ colorScheme: 'light' });
+}
+
 export async function disableMotion(page) {
   await page.addStyleTag({
     content: `

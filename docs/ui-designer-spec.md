@@ -1,427 +1,187 @@
-# UI Designer Spec
+# UI Product Surface
 
-## Purpose
+This document describes the UI that exists in this repo and the constraints a future design pass should preserve.
 
-This document describes what the future mobile-first website must enable so a designer can create a polished, intuitive interface for the backend that already exists in this project.
+## Product Shape
 
-This is not a visual design proposal and does not prescribe layout, branding, typography, or styling. It defines:
+- Local-network only
+- No auth, onboarding, or account model
+- Mobile-first web app
+- Single-product focus: manage and drive one Inky display
+- Portrait mode only for the display preview and crop workflow
 
-- the user jobs the UI must support
-- the information and controls each area must expose
-- the critical states, transitions, and feedback that must feel good in use
-- the backend-backed constraints the UI should be designed around
+## Core Navigation
 
-## Product Context
+The app has four primary areas:
 
-- The product runs on a trusted local network.
-- There is no login, onboarding, or user-account management.
-- The system controls an Inky display only.
-- The backend already supports uploads, asset browsing, queue management, playback preview/apply, next/previous navigation, playback settings, and device display settings.
-- The UI should feel lightweight, calm, and direct rather than enterprise-heavy.
-- The UI should be mobile first, because the most likely usage pattern is a user standing near the display and managing it from a phone.
+1. `Now Playing`
+2. `Library`
+3. `Queue`
+4. `Settings`
 
-## Primary User Jobs
+The bottom navigation is the primary mobile navigation pattern and should remain fast, stable, and easy to use one-handed.
 
-The UI must make these jobs easy:
-
-- upload images from the user’s device
-- review everything already uploaded
-- find a specific image quickly
-- add images to the playback queue
-- remove images from the queue
-- reorder the queue manually
-- sort the queue server-side
-- change how each queue item is displayed
-- set a global image timeout
-- override timeout per queue item
-- preview an image before making it live
-- apply the previewed image to the Inky display
-- move to the next or previous image
-- pause and resume playback
-- understand what is currently on the display
-- adjust device-level display settings when needed
-
-## Experience Principles
-
-The designer should optimize for these qualities:
-
-- Fast to understand on first use.
-- Safe to operate while standing or moving, with one-handed use in mind.
-- Confident, meaning the user can always tell what is uploaded, what is queued, what is previewed, and what is actually live on the display.
-- Low-friction, with common actions available in one or two taps.
-- Reversible where possible, especially for destructive actions and display-changing actions.
-- Quietly delightful through responsiveness, good previewing, clear status, and polished empty/loading/success/error states.
-
-## Core Objects The UI Must Represent
-
-### Asset
-
-An uploaded image asset has:
-
-- thumbnail
-- original file
-- original filename
-- dimensions
-- file size
-- created/uploaded timestamp
-- optional caption
-- favorite state
-
-The UI must treat the asset library as the source collection of uploaded images.
-
-### Queue Item
-
-A queue item is a display-ready reference to an asset with playback-specific settings:
-
-- enabled/disabled state
-- manual position in queue
-- optional timeout override
-- fit mode: `cover` or `contain`
-- background mode: `blur`, `solid`, or `none`
-- optional background color
-
-The UI must treat the queue as the ordered list used for playback.
-
-### Playback State
-
-Playback has:
-
-- active item
-- preview item
-- mode: idle, preview, displaying, paused
-- default timeout
-- loop enabled
-- shuffle enabled
-- auto-advance enabled
-- last rendered timestamp
-- current rendered image
-
-The UI must always make the difference between preview and live display obvious.
-
-### Device Settings
-
-The backend exposes device-level settings including:
-
-- orientation
-- inverted image toggle
-- timezone
-- time format
-- log system stats
-- image enhancement settings
-- brightness
-- contrast
-- sharpness
-- saturation
-- inky saturation
-
-These are advanced settings, not the primary daily workflow.
-
-## Required Product Areas
-
-The designer should assume the UI needs four top-level areas.
-
-### 1. Now Playing
+## Now Playing
 
 This is the operational home screen.
 
-It must show:
+It currently supports:
 
-- the current image rendered on the display
-- whether the app is idle, previewing, displaying, or paused
-- the current live item name if available
-- the preview item name if different from live
-- when the current image was last rendered
-- the default timeout in effect
+- a compact portrait preview of the selected image
+- a clear distinction between:
+  - the live image on the device
+  - a queued image being previewed in the UI
+  - an image currently being rendered to the device
+- a horizontally scrolling film strip of the queue
+- auto-centering of the currently live queue item in that film strip
+- tap-to-preview on queue thumbnails without triggering a real device render
+- `Apply` only when the selected image is not yet live
+- pause and resume playback
+- tap-to-expand on the main image for a larger detail view
+- crop editing from the image overlay for both previewed and live images
 
-It must allow:
+Important semantics the UI must preserve:
 
-- preview next
-- preview previous
-- preview a selected asset or queue item
-- apply the current preview
-- move immediately to next
-- move immediately to previous
-- pause playback
-- resume playback
+- Preview is non-rendering.
+- Apply triggers a real device render.
+- Returning to the already-live queue item should clear preview state.
+- Render feedback should stay subtle and in-context on the image, not through large layout-shifting banners.
 
-This is a key delight surface. The user should feel that the display is responsive, understandable, and under control.
+## Library
 
-### 2. Library
+This is the uploaded asset collection.
 
-This is the uploaded image collection.
+It currently supports:
 
-It must support:
+- thumbnail browsing
+- text search across filename and caption
+- local UI sorting by upload time and name
+- favorites filtering
+- multi-select mode
+- bulk delete
+- upload with duplicate handling
+- optional auto-add to queue on upload
+- asset detail dialog
+- caption editing
+- favorite toggle
+- `Apply Now`
+- `Add to Queue`
+- persistent crop editing for each asset
 
-- browsing thumbnails
-- search by text query
-- server-side sorting of assets
-- filtering favorites
-- pagination or infinite loading using the backend cursor model
-- opening asset details
-- editing caption
-- toggling favorite
-- deleting one asset
-- deleting multiple assets
-- uploading one or more files
-- choosing duplicate handling during upload
-- optionally auto-adding uploaded files to the queue
-- previewing an asset directly from the library
-- adding one or more assets to the queue
+Important semantics:
 
-The designer should assume the user may arrive here either to add new images or to find a previously uploaded image quickly.
+- `Apply Now` inserts the chosen image into the queue at the current live position and renders it immediately.
+- When that applied image expires, normal queue playback continues.
+- Crop edits are saved for the asset and reused anywhere that asset is rendered in cover mode.
 
-### 3. Queue
+## Queue
 
-This is the playback sequence manager.
+This is the playback sequence editor.
 
-It must support:
+It currently supports:
 
-- seeing the current ordered queue
-- distinguishing enabled and disabled items
-- reordering items manually
-- removing items from the queue
-- editing per-item settings
-- applying a server-side sort mode
-- previewing a queue item
-- understanding which queue item is currently live
-- understanding which queue item is currently previewed
-
-For each queue item, the UI must expose:
-
-- thumbnail
-- original filename
-- enabled toggle
-- timeout override
-- fit mode
-- background mode
-- background color when relevant
-
-The queue needs to feel editable without being fragile. Reordering and per-item editing are core interaction quality points.
-
-### 4. Device and Display Settings
-
-This is the advanced settings area.
-
-It must support:
-
-- reading current device settings
-- editing orientation
-- editing inverted image
-- editing timezone
-- editing time format
-- editing log system stats
-- editing brightness
-- editing contrast
-- editing sharpness
-- editing saturation
-- editing inky saturation
-
-This area should also surface the preserved defaults for reference:
-
-- brightness: `1.0`
-- contrast: `1.0`
-- sharpness: `1.0`
-- saturation: `1.0`
-- inky saturation: `0.5`
-
-This screen should feel safe and intentional because these settings affect all images, not just one queue item.
-
-## Functional Detail The UI Must Support
-
-### Upload Flow
-
-The upload experience must support:
-
-- selecting multiple files from the device
-- showing upload progress or completion feedback
-- explaining duplicate handling clearly
-- allowing the user to choose between rejecting duplicates, keeping both, or reusing the existing asset
-- optionally sending uploads straight into the queue
-
-If duplicates are found, the UI should present that result in a way that feels informative rather than error-heavy.
-
-### Asset Management
-
-The UI must make it easy to:
-
-- inspect asset metadata
-- mark favorites
-- edit caption
-- add selected assets to queue
-- bulk delete selected assets
-- preview before queueing if desired
-
-The backend does not currently support rename, tagging, albums, or folders, so the UI should not imply those features exist.
-
-### Queue Management
-
-The queue experience must support:
-
-- drag reorder or another touch-friendly reorder pattern
-- quick enable/disable
-- quick remove
-- opening an item editor for advanced settings
-- server-side queue sort options:
-  - manual
-  - name ascending
-  - name descending
-  - uploaded newest
-  - uploaded oldest
-
-If the user applies a sort, the UI should make clear that the queue order changed and that manual order can still be restored by further editing.
-
-### Playback Control
-
-The backend supports previewing by asset, previewing by queue item, and previewing next or previous.
-
-The UI must therefore make room for:
-
-- direct preview from the library
-- direct preview from the queue
-- next/previous preview from the operational display screen
-- a distinct apply action after preview
-- direct next/previous actions that commit immediately
-
-The apply step is important. Preview and live state must never be visually ambiguous.
-
-### Timeout and Playback Rules
-
-The UI must support:
-
-- global default timeout
+- seeing the ordered queue
+- seeing which item is live
+- seeing which item is previewed
+- enabled/disabled state per item
+- manual reordering
+- remove from queue
+- per-item settings in a bottom sheet
 - per-item timeout override
-- loop toggle
-- shuffle toggle
-- auto-advance toggle
+- fit mode: `cover` or `contain`
+- background mode for contained images
+- server-side sort modes
+- previewing a queue item into Now Playing
 
-The user should be able to understand which timeout is in effect for a given live image:
+Important semantics:
 
-- item override if present
-- otherwise global default
+- The queue is the playback source of truth.
+- The selected preview item may differ from the live device item.
+- The live queue position should always stay legible.
 
-### Display Rendering Controls
+## Settings
 
-The UI must expose the image fitting choices already supported by the backend:
+This area combines playback defaults, browser appearance, and device-level display settings.
 
-- `cover`
-- `contain`
+It currently supports:
 
-For contain mode, the UI must expose background options:
+- playback defaults:
+  - default timeout
+  - loop
+  - shuffle
+  - auto-advance
+- browser-local theme selection:
+  - `System`
+  - `Light`
+  - `Dark`
+- device settings:
+  - invert image
+  - timezone
+  - time format
+  - log system stats
+  - image enhancement settings
 
-- `blur`
-- `solid`
-- `none`
+Preserved device image defaults:
 
-If `solid` is chosen, the UI must allow the user to set a background color.
+- `brightness: 1.0`
+- `contrast: 1.0`
+- `sharpness: 1.0`
+- `saturation: 1.0`
+- `inky_saturation: 0.5`
 
-These controls belong to queue items rather than global device settings.
+## Crop Editing
 
-## States The UI Must Handle Well
+Crop editing is part of the shipped product and should be treated as a first-class interaction.
 
-The designer should explicitly design for:
+Current behavior:
 
-- first use with no assets uploaded
-- assets uploaded but queue empty
-- queue exists but nothing has been applied yet
-- preview active but not yet applied
-- paused playback
-- empty search results
-- upload in progress
-- upload complete with duplicates handled
-- delete confirmation
-- queue reorder in progress
-- device settings save success
-- validation error from backend
-- current image unavailable
-- network interruption to the local backend
+- available from the image overlay in Now Playing
+- available from the asset detail dialog in Library
+- opens a full-screen mobile dialog
+- shows a portrait crop viewport matching the device preview
+- supports drag-to-reposition
+- supports zoom
+- supports reset
+- supports `Save crop`
+- supports `Save & Apply` when the user is editing an image they want to send live
 
-The product should remain understandable even when there is nothing in the system yet.
+Important semantics:
 
-## Information Hierarchy Requirements
+- Crops are persisted per asset.
+- Saved crops are reused automatically when that asset is rendered in `cover` mode.
+- Crop editing should feel precise but calm, with the image doing most of the communication.
 
-At any point, the user should be able to answer these questions without effort:
+## Theme Direction
 
-- What image is currently on the display?
-- Am I looking at a preview or the live display?
-- What happens next if I tap apply, next, previous, pause, or resume?
-- Which images exist in the library?
-- Which images are in the queue?
-- What order will the queue play in?
-- Which timeout applies to this item?
-- Are playback settings global or item-specific?
-- Am I changing only one queue item, or the whole device?
+The app now supports both light and dark presentation.
 
-If a design makes these answers unclear, it is not meeting the functional brief.
+Design work should preserve:
 
-## Mobile-First Constraints
+- `System` as the default theme choice
+- a tasteful light mode that works well outdoors or near the display
+- the current amber/emerald accent language
+- strong readability over flat pure-white screens
 
-The UI should be designed assuming:
+If the browser exposes system theme preference, the app should continue to respect it.
 
-- portrait orientation first
-- thumb-friendly tap targets
-- minimal text entry
-- common actions reachable without precision tapping
-- clear separation between browse, edit, and destructive actions
-- sticky access to the most important actions on smaller screens
-- image-heavy views should remain fast and readable on small devices
+## Interaction Guardrails
 
-Desktop can become a wider version of the same product, but the primary interaction model should not depend on desktop-only affordances.
+Any design refinement should preserve these behaviors:
 
-## Delight Opportunities
+- avoid layout-jumping spinners for preview interactions
+- keep live vs preview vs rendering states easy to distinguish
+- prefer direct, mobile-friendly controls over hidden desktop-heavy affordances
+- keep destructive actions explicit
+- do not introduce UI for features the backend does not support
 
-The designer should pay special attention to these moments:
+## Out of Scope
 
-- file upload completion
-- previewing an image and seeing that it is not yet live
-- applying a preview and seeing it become live
-- reordering the queue
-- marking favorites
-- switching between library and queue without losing context
-- empty states that invite action rather than feeling dead
-- playback controls that feel calm and reliable rather than mechanical
+The current product does not support:
 
-Delight should come from clarity, speed, and polished feedback, not from adding novelty that makes the tool harder to use.
-
-## Out Of Scope For The UI
-
-The current backend does not require UI support for:
-
-- authentication
-- multiple users
-- permissions or roles
+- user accounts
+- remote internet access as a primary mode
 - folders or albums
-- tagging systems
-- image editing or cropping
-- comments or collaboration
-- cloud sync
-- multiple display types
-
-The UI should not hint at features the backend does not provide.
-
-## Backend Surfaces The UI Will Use
-
-The designer does not need to design around endpoint names, but these backend capability groups exist and should be assumed available:
-
-- asset library listing, upload, metadata update, delete, original file fetch, thumbnail fetch
-- queue listing, add, update, delete, reorder, sort
-- playback status, playback settings update, preview, apply, next, previous, pause, resume
-- device settings read and update
-- display status and current rendered image
-
-## Success Criteria For The Future UI
-
-The final UI should allow a user to do the following from a phone without confusion:
-
-- upload an image
-- see it appear in the library
-- add it to the queue
-- change how it will render
-- preview it
-- apply it to the display
-- confirm that it is now live
-- change how long it will stay on screen
-- reorder what plays next
-- pause or resume playback
-- adjust device display settings when needed
-
-If those tasks feel direct and pleasant, the design is aligned with the backend and with the product goal.
+- tags
+- image renaming
+- per-queue-item crop overrides
+- landscape-oriented display workflows
