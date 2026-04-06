@@ -406,14 +406,13 @@ export default function Library({
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5">
-            {filteredAssets.map((asset, index) => (
+            {filteredAssets.map((asset) => (
               <div
                 key={asset.id}
-                className="animate-scale-in relative group"
-                style={{ animationDelay: `${index * 30}ms` }}
+                className="relative group"
               >
                 <button
-                  className={`relative w-full aspect-square rounded-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                  className={`relative w-full aspect-square rounded-lg overflow-hidden transition-transform duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-primary/50 active:scale-[0.985] ${
                     selectedIds.has(asset.id)
                       ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
                       : ''

@@ -132,6 +132,69 @@ export default function App() {
     settings: 'Settings',
   }[activeTab];
 
+  const activeTabContent = (() => {
+    switch (activeTab) {
+      case 'now-playing':
+        return (
+          <NowPlaying
+            playbackState={playbackState}
+            playbackSettings={playbackSettings}
+            deviceSettings={deviceSettings}
+            queue={queue}
+            assets={assets}
+            onPause={handlePause}
+            onResume={handleResume}
+            onApply={handleApply}
+            onPreviewQueueItem={handlePreviewQueueItem}
+            onSaveCrop={handleSaveAssetCrop}
+            onSaveCropAndApply={handleSaveAssetCropAndApply}
+            isRendering={isRenderingToDevice}
+          />
+        );
+      case 'library':
+        return (
+          <Library
+            assets={assets}
+            deviceSettings={deviceSettings}
+            onApplyNow={handleApplyAssetNow}
+            onAddToQueue={handleAddToQueue}
+            onUpload={handleUpload}
+            onToggleFavorite={handleToggleFavorite}
+            onSaveCaption={handleSaveCaption}
+            onSaveCrop={handleSaveAssetCrop}
+            onDelete={handleDeleteAssets}
+            busy={Boolean(busyMessage)}
+          />
+        );
+      case 'queue':
+        return (
+          <QueueView
+            queue={queue}
+            playbackState={playbackState}
+            defaultTimeout={playbackSettings.default_timeout_seconds}
+            sortMode={playbackSettings.queue_sort_mode}
+            onPreview={handlePreviewQueueItem}
+            onUpdateItem={handleUpdateQueueItem}
+            onRemoveItem={handleRemoveQueueItem}
+            onMoveItem={handleMoveQueueItem}
+            onSortChange={handleSortQueue}
+          />
+        );
+      case 'settings':
+        return (
+          <SettingsView
+            deviceSettings={deviceSettings}
+            playbackSettings={playbackSettings}
+            onSave={handleSaveSettings}
+            saving={Boolean(busyMessage)}
+            themePreference={themePreference}
+            resolvedTheme={resolvedTheme}
+            onThemePreferenceChange={setThemePreference}
+          />
+        );
+    }
+  })();
+
   return (
     <div className="h-dvh flex flex-col bg-background max-w-lg mx-auto relative">
       <header className="flex items-center justify-between px-4 pt-3 pb-1 safe-top flex-shrink-0">
@@ -179,62 +242,12 @@ export default function App() {
             <p className="text-sm">Loading library and playback state…</p>
           </div>
         ) : (
-          <>
-            {activeTab === 'now-playing' && (
-              <NowPlaying
-                playbackState={playbackState}
-                playbackSettings={playbackSettings}
-                deviceSettings={deviceSettings}
-                queue={queue}
-                assets={assets}
-                onPause={handlePause}
-                onResume={handleResume}
-                onApply={handleApply}
-                onPreviewQueueItem={handlePreviewQueueItem}
-                onSaveCrop={handleSaveAssetCrop}
-                onSaveCropAndApply={handleSaveAssetCropAndApply}
-                isRendering={isRenderingToDevice}
-              />
-            )}
-            {activeTab === 'library' && (
-              <Library
-                assets={assets}
-                deviceSettings={deviceSettings}
-                onApplyNow={handleApplyAssetNow}
-                onAddToQueue={handleAddToQueue}
-                onUpload={handleUpload}
-                onToggleFavorite={handleToggleFavorite}
-                onSaveCaption={handleSaveCaption}
-                onSaveCrop={handleSaveAssetCrop}
-                onDelete={handleDeleteAssets}
-                busy={Boolean(busyMessage)}
-              />
-            )}
-            {activeTab === 'queue' && (
-              <QueueView
-                queue={queue}
-                playbackState={playbackState}
-                defaultTimeout={playbackSettings.default_timeout_seconds}
-                sortMode={playbackSettings.queue_sort_mode}
-                onPreview={handlePreviewQueueItem}
-                onUpdateItem={handleUpdateQueueItem}
-                onRemoveItem={handleRemoveQueueItem}
-                onMoveItem={handleMoveQueueItem}
-                onSortChange={handleSortQueue}
-              />
-            )}
-            {activeTab === 'settings' && (
-              <SettingsView
-                deviceSettings={deviceSettings}
-                playbackSettings={playbackSettings}
-                onSave={handleSaveSettings}
-                saving={Boolean(busyMessage)}
-                themePreference={themePreference}
-                resolvedTheme={resolvedTheme}
-                onThemePreferenceChange={setThemePreference}
-              />
-            )}
-          </>
+          <div
+            key={activeTab}
+            className="h-full animate-page-enter"
+          >
+            {activeTabContent}
+          </div>
         )}
       </main>
 

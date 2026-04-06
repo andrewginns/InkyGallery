@@ -82,6 +82,7 @@ export default function NowPlaying({
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
   const filmStripRef = useRef<HTMLDivElement | null>(null);
   const queueItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const hasPositionedFilmStripRef = useRef(false);
   const [timeRemaining, setTimeRemaining] = useState(
     playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
   );
@@ -157,29 +158,47 @@ export default function NowPlaying({
   }, [displayedUrl]);
 
   useEffect(() => {
-    if (!liveQueueItem) {
+    const focusedQueueItemId = selectedQueueItem?.id ?? liveQueueItem?.id;
+    if (!focusedQueueItemId) {
+      hasPositionedFilmStripRef.current = false;
       return;
     }
 
     const filmStrip = filmStripRef.current;
-    const liveItem = queueItemRefs.current[liveQueueItem.id];
-    if (!filmStrip || !liveItem) {
+    const focusedItem = queueItemRefs.current[focusedQueueItemId];
+    if (!filmStrip || !focusedItem) {
       return;
     }
 
-    const centerLiveItem = () => {
-      const targetScrollLeft =
-        liveItem.offsetLeft - filmStrip.clientWidth / 2 + liveItem.clientWidth / 2;
-      const maxScrollLeft = Math.max(0, filmStrip.scrollWidth - filmStrip.clientWidth);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const positionFocusedItem = () => {
+      const itemCenter = focusedItem.offsetLeft + focusedItem.clientWidth / 2;
+      const viewportLeft = filmStrip.scrollLeft;
+      const viewportWidth = filmStrip.clientWidth;
+      const comfortableViewportStart = viewportLeft + viewportWidth * 0.28;
+      const comfortableViewportEnd = viewportLeft + viewportWidth * 0.72;
+      const isComfortablyVisible =
+        itemCenter >= comfortableViewportStart && itemCenter <= comfortableViewportEnd;
+
+      if (isComfortablyVisible) {
+        hasPositionedFilmStripRef.current = true;
+        return;
+      }
+
+      const targetScrollLeft = itemCenter - viewportWidth / 2;
+      const maxScrollLeft = Math.max(0, filmStrip.scrollWidth - viewportWidth);
       filmStrip.scrollTo({
         left: Math.min(Math.max(0, targetScrollLeft), maxScrollLeft),
-        behavior: 'smooth',
+        behavior:
+          prefersReducedMotion || !hasPositionedFilmStripRef.current ? 'auto' : 'smooth',
       });
+      hasPositionedFilmStripRef.current = true;
     };
 
-    const frame = window.requestAnimationFrame(centerLiveItem);
+    const frame = window.requestAnimationFrame(positionFocusedItem);
     return () => window.cancelAnimationFrame(frame);
-  }, [liveQueueItem?.id, queue.length]);
+  }, [liveQueueItem?.id, queue.length, selectedQueueItem?.id]);
 
   const modeLabel: Record<PlaybackState['mode'], string> = {
     idle: 'Idle',

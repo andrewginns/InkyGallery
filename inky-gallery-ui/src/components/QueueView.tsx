@@ -129,7 +129,7 @@ export default function Queue({
               return (
                 <div
                   key={item.id}
-                  className={`group flex items-center gap-2.5 p-2 rounded-xl transition-all animate-fade-in ${
+                  className={`group flex items-center gap-2.5 rounded-xl p-2 transition-[background-color,box-shadow,opacity,transform] duration-200 ease-out ${
                     isDragging
                       ? 'opacity-50 scale-[0.98]'
                       : isActive
@@ -138,7 +138,6 @@ export default function Queue({
                       ? 'bg-amber-500/8 ring-1 ring-amber-500/20'
                       : 'bg-card hover:bg-card/80'
                   } ${!item.enabled ? 'opacity-50' : ''}`}
-                  style={{ animationDelay: `${index * 40}ms` }}
                   id={`queue-item-${item.id}`}
                 >
                   {/* Drag handle */}
