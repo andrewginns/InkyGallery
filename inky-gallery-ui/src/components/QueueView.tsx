@@ -242,6 +242,7 @@ export default function Queue({
                       size="icon"
                       className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => onPreview(item.id)}
+                      id={`queue-item-${item.id}-preview`}
                     >
                       <Eye className="w-4 h-4" />
                     </Button>
@@ -250,6 +251,7 @@ export default function Queue({
                       size="icon"
                       className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => setEditingItem(item)}
+                      id={`queue-item-${item.id}-settings`}
                     >
                       <Settings2 className="w-4 h-4" />
                     </Button>
@@ -258,6 +260,7 @@ export default function Queue({
                       size="icon"
                       className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
                       onClick={() => onRemoveItem(item.id)}
+                      id={`queue-item-${item.id}-remove`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
