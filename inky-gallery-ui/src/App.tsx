@@ -400,7 +400,7 @@ export default function App() {
           </div>
           <h1 className="text-lg font-bold tracking-tight">{pageTitle}</h1>
         </div>
-        {activeTab === 'now-playing' && (playbackState.mode === 'displaying' || isRenderingToDevice) && (
+        {activeTab === 'now-playing' && playbackState.mode === 'displaying' && !isRenderingToDevice && (
           <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
             <span className="font-medium">Live</span>

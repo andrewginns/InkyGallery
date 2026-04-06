@@ -84,10 +84,11 @@ export default function NowPlaying({
   const liveQueueItem = activeQueueItem;
   const selectedQueueItem = previewQueueItem || liveQueueItem;
 
+  const hasDisplayableImage = Boolean(playbackState.active_asset_id || playbackState.preview_asset_id);
   const effectiveMode: PlaybackState['mode'] = isRendering
-    ? (playbackState.active_asset_id || playbackState.preview_asset_id ? 'displaying' : 'idle')
+    ? (hasDisplayableImage ? 'displaying' : 'idle')
     : playbackState.mode;
-  const isPreview = effectiveMode === 'preview';
+  const isPreview = !isRendering && effectiveMode === 'preview';
   const isPaused = playbackState.mode === 'paused';
   const isIdle = effectiveMode === 'idle';
   const hasQueue = queue.length > 0;
@@ -150,6 +151,10 @@ export default function NowPlaying({
     paused:
       'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30',
   };
+  const statusLabel = isRendering ? 'Applying' : modeLabel[effectiveMode];
+  const statusClass = isRendering
+    ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+    : modeColor[effectiveMode];
 
   return (
     <div className="flex flex-col h-full">
@@ -210,12 +215,12 @@ export default function NowPlaying({
 
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${modeColor[effectiveMode]}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${statusClass}`}
             >
-              {effectiveMode === 'displaying' && (
+              {!isRendering && effectiveMode === 'displaying' && (
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
               )}
-              {modeLabel[effectiveMode]}
+              {statusLabel}
             </span>
           </div>
 
