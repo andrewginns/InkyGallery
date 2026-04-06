@@ -104,7 +104,7 @@ export default function Library({
   const [showCropEditor, setShowCropEditor] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState<'reject' | 'reuse_existing' | 'keep_both'>('reuse_existing');
-  const [autoAddToQueue, setAutoAddToQueue] = useState(false);
+  const [autoAddToQueue, setAutoAddToQueue] = useState(true);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -212,7 +212,7 @@ export default function Library({
       { duplicatePolicy, autoAddToQueue }
     );
     clearPendingUploads();
-    setAutoAddToQueue(false);
+    setAutoAddToQueue(true);
     setDuplicatePolicy('reuse_existing');
     setShowUploadDialog(false);
   };
@@ -655,7 +655,7 @@ export default function Library({
           setShowUploadDialog(open);
           if (!open) {
             clearPendingUploads();
-            setAutoAddToQueue(false);
+            setAutoAddToQueue(true);
             setDuplicatePolicy('reuse_existing');
           }
         }}
@@ -773,7 +773,7 @@ export default function Library({
               <div>
                 <p className="text-sm font-medium">Auto-add to queue</p>
                 <p className="text-xs text-muted-foreground">
-                  New uploads go straight to the playback queue
+                  New uploads go straight to the playback queue by default
                 </p>
               </div>
             </label>
