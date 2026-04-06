@@ -120,6 +120,31 @@ function normalizePlaybackState(state: PlaybackState, displayStatus: DisplayStat
   };
 }
 
+function buildOptimisticApplyState(
+  current: PlaybackState,
+  queue: QueueItem[],
+  settings: PlaybackSettings
+): PlaybackState {
+  const previewQueueItem = current.preview_queue_item_id
+    ? queue.find((item) => item.id === current.preview_queue_item_id) || null
+    : null;
+  const timeoutSeconds =
+    previewQueueItem?.timeout_seconds_override ?? settings.default_timeout_seconds;
+  const now = new Date();
+
+  return {
+    ...current,
+    mode: 'displaying',
+    active_queue_item_id: current.preview_queue_item_id ?? current.active_queue_item_id,
+    active_asset_id: current.preview_asset_id ?? current.active_asset_id,
+    preview_queue_item_id: null,
+    preview_asset_id: null,
+    display_started_at: now.toISOString(),
+    display_expires_at: new Date(now.getTime() + timeoutSeconds * 1000).toISOString(),
+    time_remaining_seconds: timeoutSeconds,
+  };
+}
+
 function extractErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
     return error.message;
@@ -140,6 +165,7 @@ export default function App() {
   const [displayStatus, setDisplayStatus] = useState<DisplayStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
+  const [isRenderingToDevice, setIsRenderingToDevice] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const setPlaybackPayload = (payload: PlaybackPayload, nextDisplayStatus: DisplayStatus | null) => {
@@ -324,10 +350,21 @@ export default function App() {
     });
 
   const handleApply = () =>
-    withAction('Rendering to device…', async () => {
-      await applyPreview();
-      await refreshPlaybackAndDisplay();
-    });
+    (async () => {
+      const previousPlaybackState = playbackState;
+      setErrorMessage(null);
+      setIsRenderingToDevice(true);
+      setPlaybackState(buildOptimisticApplyState(playbackState, queue, playbackSettings));
+      try {
+        await applyPreview();
+        await refreshPlaybackAndDisplay();
+      } catch (error) {
+        setPlaybackState(previousPlaybackState);
+        setErrorMessage(extractErrorMessage(error));
+      } finally {
+        setIsRenderingToDevice(false);
+      }
+    })();
 
   const handleSaveSettings = (nextDeviceSettings: DeviceSettings, nextPlaybackSettings: PlaybackSettings) =>
     withAction('Saving settings…', async () => {
@@ -346,7 +383,6 @@ export default function App() {
     displayStatus?.hardware.hardware_enabled && !displayStatus.hardware.hardware_ready
       ? displayStatus.hardware.init_error || 'Inky hardware is attached but not ready.'
       : null;
-  const isRenderingToDevice = busyMessage === 'Rendering to device…';
 
   const pageTitle = {
     'now-playing': 'Now Playing',
@@ -372,7 +408,7 @@ export default function App() {
         )}
       </header>
 
-      {(errorMessage || hardwareWarning || busyMessage) && (
+      {(errorMessage || hardwareWarning || (busyMessage && !isRenderingToDevice)) && (
         <div className="px-4 pt-2 flex-shrink-0">
           {errorMessage && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive flex items-start gap-2">
@@ -386,7 +422,7 @@ export default function App() {
               <span>{hardwareWarning}</span>
             </div>
           )}
-          {!errorMessage && !hardwareWarning && busyMessage && (
+          {!errorMessage && !hardwareWarning && busyMessage && !isRenderingToDevice && (
             <div className="rounded-xl border border-border/60 bg-card px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
               <LoaderCircle className="w-4 h-4 animate-spin flex-shrink-0" />
               <span>{busyMessage}</span>
