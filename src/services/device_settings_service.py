@@ -67,6 +67,19 @@ class DeviceSettingsService:
         return int(width), int(height)
 
     def update_settings(self, updates: dict) -> dict:
+        settings = self.prepare_updated_settings(updates)
+        self.save_settings(settings)
+        return settings
+
+    def prepare_updates_from_snapshot(self, snapshot: dict) -> dict:
+        current = self.get_settings()
+        unknown_keys = set(snapshot.keys()) - set(current.keys())
+        if unknown_keys:
+            unknown = ", ".join(sorted(unknown_keys))
+            raise ValueError(f"Unsupported device setting fields: {unknown}")
+        return {key: snapshot[key] for key in self.MUTABLE_KEYS if key in snapshot}
+
+    def prepare_updated_settings(self, updates: dict) -> dict:
         unknown_keys = set(updates.keys()) - self.MUTABLE_KEYS
         if unknown_keys:
             unknown = ", ".join(sorted(unknown_keys))
@@ -87,7 +100,6 @@ class DeviceSettingsService:
             settings["image_settings"] = _merge_defaults(image_updates, settings.get("image_settings", {}))
         settings["orientation"] = "vertical"
         self.validate_settings(settings)
-        self.save_settings(settings)
         return settings
 
     def update_value(self, key: str, value, write=True):

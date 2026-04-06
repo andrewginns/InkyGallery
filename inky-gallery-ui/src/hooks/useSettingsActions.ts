@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { getDisplayStatus, updateDeviceSettings, updatePlaybackSettings } from '@/lib/api';
+import { updateAppSettings } from '@/lib/api';
 import type { DeviceSettings, DisplayStatus, PlaybackSettings } from '@/data/types';
 
 interface UseSettingsActionsOptions {
@@ -19,14 +19,10 @@ export function useSettingsActions({
 }: UseSettingsActionsOptions) {
   const handleSaveSettings = (nextDeviceSettings: DeviceSettings, nextPlaybackSettings: PlaybackSettings) =>
     runAction('Saving settings…', async () => {
-      const [savedDeviceSettings, savedPlaybackSettings] = await Promise.all([
-        updateDeviceSettings(nextDeviceSettings),
-        updatePlaybackSettings(nextPlaybackSettings),
-      ]);
-      const nextDisplayStatus = await getDisplayStatus();
-      setDeviceSettings(savedDeviceSettings);
-      setPlaybackSettings(savedPlaybackSettings);
-      setDisplayStatus(nextDisplayStatus);
+      const result = await updateAppSettings(nextDeviceSettings, nextPlaybackSettings);
+      setDeviceSettings(result.device_settings);
+      setPlaybackSettings(result.playback_settings);
+      setDisplayStatus(result.display_status);
       await refreshPlaybackAndDisplay();
     });
 

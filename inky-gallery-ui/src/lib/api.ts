@@ -19,6 +19,11 @@ export class ApiError extends Error {
   }
 }
 
+function isHtmlResponseText(payload: string) {
+  const sample = payload.trim().slice(0, 256).toLowerCase();
+  return sample.startsWith('<!doctype html') || sample.startsWith('<html') || sample.includes('<body');
+}
+
 async function apiRequest<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     headers: {
@@ -36,7 +41,13 @@ async function apiRequest<T>(input: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     if (response.status === 413) {
-      throw new ApiError('Upload too large. Max 20 MiB per file.', response.status);
+      const message =
+        typeof payload === 'string'
+          ? isHtmlResponseText(payload)
+            ? 'Upload too large. Max 20 MiB per file and 64 MiB per request.'
+            : payload
+          : payload?.error || 'Upload too large. Max 20 MiB per file and 64 MiB per request.';
+      throw new ApiError(message, response.status);
     }
     const message =
       typeof payload === 'string'
@@ -240,6 +251,20 @@ export function updateDeviceSettings(updates: Partial<DeviceSettings>) {
   return apiRequest<DeviceSettings>('/api/device/settings', {
     method: 'PATCH',
     body: JSON.stringify(updates),
+  });
+}
+
+export function updateAppSettings(deviceSettings: DeviceSettings, playbackSettings: PlaybackSettings) {
+  return apiRequest<{
+    device_settings: DeviceSettings;
+    playback_settings: PlaybackSettings;
+    display_status: DisplayStatus;
+  }>('/api/settings', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      device_settings: deviceSettings,
+      playback_settings: playbackSettings,
+    }),
   });
 }
 

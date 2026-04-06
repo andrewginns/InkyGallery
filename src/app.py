@@ -88,6 +88,31 @@ def _discover_trusted_hosts() -> set[str]:
     return hosts
 
 
+def _is_loopback_address(value: str | None) -> bool:
+    if not value:
+        return False
+    candidate = value.split("%", 1)[0]
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
+
+
+def _effective_client_ip() -> str | None:
+    remote_addr = request.remote_addr
+    if not _is_loopback_address(remote_addr):
+        return remote_addr
+
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        first_hop = forwarded_for.split(",", 1)[0].strip()
+        if first_hop:
+            return first_hop
+
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    return real_ip or remote_addr
+
+
 def create_app():
     logging.config.fileConfig(str(SRC_DIR / "config" / "logging.conf"), disable_existing_loggers=False)
     if register_heif_opener is not None:
@@ -96,7 +121,7 @@ def create_app():
         logging.getLogger(__name__).warning("pi_heif not installed; HEIF/HEIC uploads will not be available")
 
     app = Flask(__name__)
-    default_request_limit = AssetService.MAX_UPLOAD_BYTES + (2 * 1024 * 1024)
+    default_request_limit = max(64 * 1024 * 1024, AssetService.MAX_UPLOAD_BYTES + (2 * 1024 * 1024))
     app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("INKYGALLERY_MAX_REQUEST_BYTES", default_request_limit))
     app.config["FRONTEND_DIR"] = _resolve_frontend_dir()
     app.config["TRUSTED_HOSTS"] = _discover_trusted_hosts()
@@ -154,19 +179,28 @@ def create_app():
 
     @app.get("/health")
     def health():
-        return {
-            "ok": True,
-            "project_root": str(PROJECT_ROOT),
-            "frontend_dir": str(app.config["FRONTEND_DIR"]),
-            "data_dir": str(data_dir),
-            "device_config_path": str(device_config_path),
-            "current_image_path": str(current_image_path),
-        }
+        response = {"ok": True}
+        verbose = request.args.get("verbose") == "1" and (
+            os.getenv("DEBUG") == "1" or _is_loopback_address(_effective_client_ip())
+        )
+        if verbose:
+            response.update(
+                {
+                    "project_root": str(PROJECT_ROOT),
+                    "frontend_dir": str(app.config["FRONTEND_DIR"]),
+                    "data_dir": str(data_dir),
+                    "device_config_path": str(device_config_path),
+                    "current_image_path": str(current_image_path),
+                }
+            )
+        return response
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_request_entity_too_large(error):
+        per_file_limit_mib = AssetService.MAX_UPLOAD_BYTES // (1024 * 1024)
+        request_limit_mib = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
         message = (
-            f"Upload too large. Max {AssetService.MAX_UPLOAD_BYTES // (1024 * 1024)} MiB per file."
+            f"Upload too large. Max {per_file_limit_mib} MiB per file and {request_limit_mib} MiB per request."
         )
         if request.path.startswith("/api/"):
             return jsonify({"error": message}), 413

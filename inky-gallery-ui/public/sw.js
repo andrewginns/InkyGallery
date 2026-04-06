@@ -35,8 +35,7 @@ function isCacheableStatic(requestUrl) {
   return (
     requestUrl.pathname.startsWith("/assets/") ||
     requestUrl.pathname.startsWith("/icons/") ||
-    requestUrl.pathname === "/manifest.webmanifest" ||
-    requestUrl.pathname === "/favicon.ico"
+    requestUrl.pathname === "/manifest.webmanifest"
   );
 }
 
@@ -56,8 +55,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put("/", copy));
+          if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
+            const copy = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put("/", copy));
+          }
           return response;
         })
         .catch(async () => {
@@ -73,8 +74,10 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then((cached) => {
         const networkFetch = fetch(request)
           .then((response) => {
-            const copy = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+            }
             return response;
           })
           .catch(() => cached);

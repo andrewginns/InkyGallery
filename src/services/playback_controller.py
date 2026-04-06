@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class PlaybackController:
+    VALID_QUEUE_SORT_MODES = {"manual", "name_asc", "name_desc", "uploaded_newest", "uploaded_oldest"}
+
     def __init__(self, playback_repo, queue_repo, display_service, queue_service=None):
         self.playback_repo = playback_repo
         self.queue_repo = queue_repo
@@ -48,6 +50,15 @@ class PlaybackController:
         }
 
     def update_settings(self, updates: dict):
+        normalized = self.prepare_settings_update(updates)
+        return self.commit_prepared_settings(normalized)
+
+    def commit_prepared_settings(self, normalized: dict):
+        settings = self.playback_repo.update_settings(normalized)
+        self.wake_event.set()
+        return settings
+
+    def prepare_settings_update(self, updates: dict):
         normalized = {}
         for key in ("default_timeout_seconds", "loop_enabled", "shuffle_enabled", "auto_advance_enabled", "queue_sort_mode"):
             if key in updates:
@@ -57,10 +68,12 @@ class PlaybackController:
         for key in ("loop_enabled", "shuffle_enabled", "auto_advance_enabled"):
             if key in normalized:
                 normalized[key] = int(bool(normalized[key]))
+        if "queue_sort_mode" in normalized and normalized["queue_sort_mode"] not in self.VALID_QUEUE_SORT_MODES:
+            raise ValueError(
+                "queue_sort_mode must be one of: manual, name_asc, name_desc, uploaded_newest, uploaded_oldest"
+            )
         normalized["updated_at"] = utcnow_iso()
-        settings = self.playback_repo.update_settings(normalized)
-        self.wake_event.set()
-        return settings
+        return normalized
 
     def preview(self, queue_item_id=None, asset_id=None, direction=None):
         with self.lock:

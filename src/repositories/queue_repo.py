@@ -163,8 +163,11 @@ class QueueRepository:
                 conn.execute("UPDATE queue_items SET position = ? WHERE id = ?", (position, item["id"]))
 
     def reorder(self, ordered_ids: list[str]):
-        existing = {item["id"] for item in self.list_items()}
-        if existing != set(ordered_ids):
+        existing_items = self.list_items()
+        existing_ids = [item["id"] for item in existing_items]
+        if len(ordered_ids) != len(existing_ids) or len(set(ordered_ids)) != len(ordered_ids):
+            raise ValueError("Ordered queue item ids must match the existing queue exactly.")
+        if set(existing_ids) != set(ordered_ids):
             raise ValueError("Ordered queue item ids must match the existing queue exactly.")
         with self.database.connection() as conn:
             temp_offset = len(ordered_ids)

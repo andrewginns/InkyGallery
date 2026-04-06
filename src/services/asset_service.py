@@ -24,38 +24,26 @@ class AssetService:
         self.device_settings_service = device_settings_service
 
     def ingest_uploads(self, files, duplicate_policy="reject", auto_add_to_queue=False):
-        created = []
-        duplicates = []
+        prepared_uploads, duplicates = self._prepare_uploads(
+            files,
+            duplicate_policy=duplicate_policy,
+            auto_add_to_queue=auto_add_to_queue,
+        )
 
-        for file in files:
-            filename = file.filename or ""
-            extension = os.path.splitext(filename)[1].replace(".", "").lower()
-            if not filename or extension not in self.ALLOWED_EXTENSIONS:
-                raise ValueError(f"Unsupported file type for '{filename or 'upload'}'")
+        created_asset_ids: list[str] = []
+        created_queue_item_ids: list[str] = []
+        created: list[dict] = []
 
-            payload = self._read_limited_upload(file)
-            if not payload:
-                raise ValueError(f"Uploaded file '{filename}' is empty")
-
-            checksum = hashlib.sha256(payload).hexdigest()
-            existing = self.assets_repo.get_asset_by_checksum(checksum)
-            if existing:
-                if duplicate_policy == "reject":
-                    raise ValueError(f"Duplicate asset detected for '{filename}'")
-                duplicates.append(
-                    {
-                        "filename_original": filename,
-                        "existing_asset_id": existing["id"],
-                        "action": "reuse_existing" if duplicate_policy == "reuse_existing" else "keep_both",
-                    }
-                )
-                if duplicate_policy == "reuse_existing":
-                    if auto_add_to_queue:
-                        now = utcnow_iso()
-                        self.queue_repo.append_item(
+        try:
+            for prepared in prepared_uploads:
+                now = utcnow_iso()
+                if prepared["kind"] == "reuse_existing":
+                    asset_id = prepared["asset"]["id"]
+                    if prepared["auto_add_to_queue"]:
+                        queue_item = self.queue_repo.append_item(
                             {
                                 "id": uuid.uuid4().hex,
-                                "asset_id": existing["id"],
+                                "asset_id": asset_id,
                                 "enabled": True,
                                 "timeout_seconds_override": None,
                                 "fit_mode": "cover",
@@ -65,35 +53,28 @@ class AssetService:
                                 "updated_at": now,
                             }
                         )
-                    created.append(existing)
+                        created_queue_item_ids.append(queue_item["id"])
+                    created.append(self.assets_repo.get_asset(asset_id))
                     continue
 
-            asset_id = uuid.uuid4().hex
-            image = self._load_image(filename, payload)
-            stored_name = f"original.{extension}"
-            buffer = io.BytesIO()
-            save_format = image.format or extension.upper()
-            if save_format == "JPG":
-                save_format = "JPEG"
-            if save_format in {"HEIC", "HEIF"}:
-                save_format = "PNG"
-                stored_name = "original.png"
-            image.save(buffer, format=save_format)
-            normalized_payload = buffer.getvalue()
-            now = utcnow_iso()
-            try:
-                stored_name, _ = self.media_store.save_original_bytes(asset_id, stored_name, normalized_payload)
+                asset_id = prepared["asset_id"]
+                created_asset_ids.append(asset_id)
+                stored_name, _ = self.media_store.save_original_bytes(
+                    asset_id,
+                    prepared["stored_name"],
+                    prepared["normalized_payload"],
+                )
                 asset = self.assets_repo.create_asset(
                     {
                         "id": asset_id,
-                        "filename_original": filename,
+                        "filename_original": prepared["filename_original"],
                         "filename_stored": stored_name,
-                        "mime_type": mimetypes.guess_type(filename)[0] or "application/octet-stream",
-                        "extension": extension,
-                        "checksum_sha256": checksum,
-                        "width": image.size[0],
-                        "height": image.size[1],
-                        "file_size_bytes": len(normalized_payload),
+                        "mime_type": prepared["stored_mime_type"],
+                        "extension": prepared["stored_extension"],
+                        "checksum_sha256": prepared["checksum_sha256"],
+                        "width": prepared["image"].size[0],
+                        "height": prepared["image"].size[1],
+                        "file_size_bytes": len(prepared["normalized_payload"]),
                         "favorite": False,
                         "caption": None,
                         "source_type": "upload",
@@ -102,11 +83,11 @@ class AssetService:
                         "deleted_at": None,
                     }
                 )
-                self._create_thumbnail(asset_id, image.copy(), "thumbnail_sm", "sm.webp", 256)
-                self._create_thumbnail(asset_id, image.copy(), "thumbnail_md", "md.webp", 768)
+                self._create_thumbnail(asset_id, prepared["image"].copy(), "thumbnail_sm", "sm.webp", 256)
+                self._create_thumbnail(asset_id, prepared["image"].copy(), "thumbnail_md", "md.webp", 768)
 
-                if auto_add_to_queue:
-                    self.queue_repo.append_item(
+                if prepared["auto_add_to_queue"]:
+                    queue_item = self.queue_repo.append_item(
                         {
                             "id": uuid.uuid4().hex,
                             "asset_id": asset_id,
@@ -119,11 +100,15 @@ class AssetService:
                             "updated_at": now,
                         }
                     )
-            except Exception:
+                    created_queue_item_ids.append(queue_item["id"])
+                created.append(asset)
+        except Exception:
+            for queue_item_id in reversed(created_queue_item_ids):
+                self.queue_repo.delete_item(queue_item_id)
+            for asset_id in reversed(created_asset_ids):
                 self.assets_repo.delete_asset(asset_id)
                 self.media_store.delete_asset_files(asset_id)
-                raise
-            created.append(asset)
+            raise
 
         return {"created": [self.serialize_asset(asset["id"]) for asset in created], "duplicates": duplicates}
 
@@ -155,11 +140,17 @@ class AssetService:
         variants = self.assets_repo.list_variants(asset_id)
         thumbnails = {variant["kind"]: variant for variant in variants}
         crop_profile = self.assets_repo.get_crop_profile(asset_id)
+        source_extension = os.path.splitext(asset["filename_original"])[1].replace(".", "").lower()
+        stored_extension = os.path.splitext(asset["filename_stored"])[1].replace(".", "").lower()
+        stored_mime_type = mimetypes.guess_type(asset["filename_stored"])[0] or asset["mime_type"]
+        source_mime_type = mimetypes.guess_type(asset["filename_original"])[0] or stored_mime_type
         return {
             "id": asset["id"],
             "filename_original": asset["filename_original"],
-            "mime_type": asset["mime_type"],
-            "extension": asset["extension"],
+            "mime_type": stored_mime_type,
+            "extension": stored_extension or asset["extension"],
+            "source_mime_type": source_mime_type,
+            "source_extension": source_extension or asset["extension"],
             "width": asset["width"],
             "height": asset["height"],
             "file_size_bytes": asset["file_size_bytes"],
@@ -177,6 +168,78 @@ class AssetService:
             "file_url": f"/api/assets/{asset_id}/file",
             "crop_profile": self._serialize_crop_profile(crop_profile),
         }
+
+    def _prepare_uploads(self, files, duplicate_policy="reject", auto_add_to_queue=False):
+        prepared_uploads = []
+        duplicates = []
+        batch_checksum_map: dict[str, dict] = {}
+
+        for file in files:
+            filename = file.filename or ""
+            extension = os.path.splitext(filename)[1].replace(".", "").lower()
+            if not filename or extension not in self.ALLOWED_EXTENSIONS:
+                raise ValueError(f"Unsupported file type for '{filename or 'upload'}'")
+
+            payload = self._read_limited_upload(file)
+            if not payload:
+                raise ValueError(f"Uploaded file '{filename}' is empty")
+
+            checksum = hashlib.sha256(payload).hexdigest()
+            batch_existing = batch_checksum_map.get(checksum)
+            persisted_existing = self.assets_repo.get_asset_by_checksum(checksum)
+            duplicate_target = persisted_existing or batch_existing
+            if duplicate_target:
+                if duplicate_policy == "reject":
+                    raise ValueError(f"Duplicate asset detected for '{filename}'")
+                duplicates.append(
+                    {
+                        "filename_original": filename,
+                        "existing_asset_id": duplicate_target["id"],
+                        "action": "reuse_existing" if duplicate_policy == "reuse_existing" else "keep_both",
+                    }
+                )
+                if duplicate_policy == "reuse_existing":
+                    prepared_uploads.append(
+                        {
+                            "kind": "reuse_existing",
+                            "asset": duplicate_target,
+                            "auto_add_to_queue": auto_add_to_queue,
+                        }
+                    )
+                    continue
+
+            image = self._load_image(filename, payload)
+            stored_name = f"original.{extension}"
+            buffer = io.BytesIO()
+            save_format = image.format or extension.upper()
+            if save_format == "JPG":
+                save_format = "JPEG"
+            if save_format in {"HEIC", "HEIF"}:
+                save_format = "PNG"
+                stored_name = "original.png"
+            image.save(buffer, format=save_format)
+            normalized_payload = buffer.getvalue()
+            stored_extension = os.path.splitext(stored_name)[1].replace(".", "").lower()
+            stored_mime_type = mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
+            prepared = {
+                "kind": "create",
+                "asset_id": uuid.uuid4().hex,
+                "filename_original": filename,
+                "stored_name": stored_name,
+                "stored_extension": stored_extension or extension,
+                "stored_mime_type": stored_mime_type,
+                "checksum_sha256": checksum,
+                "normalized_payload": normalized_payload,
+                "image": image,
+                "auto_add_to_queue": auto_add_to_queue,
+                "id": None,
+            }
+            prepared["id"] = prepared["asset_id"]
+            prepared_uploads.append(prepared)
+            if duplicate_policy != "keep_both":
+                batch_checksum_map[checksum] = {"id": prepared["asset_id"]}
+
+        return prepared_uploads, duplicates
 
     def update_asset(self, asset_id: str, updates: dict):
         safe_updates = {}

@@ -3,6 +3,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from PIL import Image
+from services.asset_service import AssetService
 
 
 def make_png_bytes(color):
@@ -28,7 +29,20 @@ def make_split_png_bytes(left_color, right_color, size=(200, 100)):
 def test_health_and_defaults(client):
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json["ok"] is True
+    assert health.json == {"ok": True}
+
+    verbose_health = client.get("/health?verbose=1")
+    assert verbose_health.status_code == 200
+    assert verbose_health.json["ok"] is True
+    assert "project_root" in verbose_health.json
+
+    proxied_verbose_health = client.get(
+        "/health?verbose=1",
+        headers={"X-Forwarded-For": "192.168.3.42", "X-Real-IP": "192.168.3.42"},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+    )
+    assert proxied_verbose_health.status_code == 200
+    assert proxied_verbose_health.json == {"ok": True}
 
     settings = client.get("/api/device/settings")
     assert settings.status_code == 200
@@ -45,6 +59,23 @@ def test_health_and_defaults(client):
     assert display_status.json["hardware"]["display_type"] == "inky"
     assert display_status.json["hardware"]["hardware_enabled"] is False
     assert display_status.json["hardware"]["hardware_ready"] is False
+
+
+def test_default_request_limit_supports_multi_file_batches(app):
+    assert app.config["MAX_CONTENT_LENGTH"] >= AssetService.MAX_UPLOAD_BYTES * 2
+
+
+def test_pwa_shell_assets_exist(client):
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.status_code == 200
+    assert manifest.json["name"] == "InkyGallery"
+    assert manifest.json["display"] == "standalone"
+
+    sw = client.get("/sw.js")
+    assert sw.status_code == 200
+    sw_text = sw.get_data(as_text=True)
+    assert "/icons/favicon.ico" in sw_text
+    assert 'requestUrl.pathname === "/favicon.ico"' not in sw_text
 
 
 def test_asset_upload_and_list(client, sample_png_bytes):
@@ -111,6 +142,8 @@ def test_upload_limit_returns_json_error(client, app):
     assert response.status_code == 413
     assert response.is_json
     assert "upload too large" in response.json["error"].lower()
+    assert "per file" in response.json["error"].lower()
+    assert "per request" in response.json["error"].lower()
 
 
 def test_asset_crop_profile_round_trip(client, sample_png_bytes):
@@ -351,6 +384,83 @@ def test_device_settings_patch(client):
     assert response.json["image_settings"]["inky_saturation"] == 0.5
 
 
+def test_combined_settings_patch_is_applied_together(client):
+    response = client.patch(
+        "/api/settings",
+        json={
+            "device_settings": {
+                "image_settings": {
+                    "brightness": 1.2,
+                },
+            },
+            "playback_settings": {
+                "default_timeout_seconds": 180,
+                "queue_sort_mode": "uploaded_oldest",
+            },
+        },
+    )
+    assert response.status_code == 200, response.json
+    assert response.json["device_settings"]["image_settings"]["brightness"] == 1.2
+    assert response.json["playback_settings"]["default_timeout_seconds"] == 180
+    assert response.json["playback_settings"]["queue_sort_mode"] == "uploaded_oldest"
+    assert response.json["display_status"]["default_timeout_seconds"] == 180
+
+
+def test_combined_settings_patch_accepts_full_device_snapshot(client):
+    current_device = client.get("/api/device/settings")
+    assert current_device.status_code == 200
+
+    snapshot = current_device.json
+    snapshot["image_settings"]["brightness"] = 1.15
+
+    response = client.patch(
+        "/api/settings",
+        json={
+            "device_settings": snapshot,
+            "playback_settings": {
+                "default_timeout_seconds": 150,
+            },
+        },
+    )
+    assert response.status_code == 200, response.json
+    assert response.json["device_settings"]["image_settings"]["brightness"] == 1.15
+    assert response.json["device_settings"]["orientation"] == "vertical"
+    assert response.json["playback_settings"]["default_timeout_seconds"] == 150
+
+
+def test_combined_settings_patch_rolls_back_device_settings_on_playback_failure(client, app, monkeypatch):
+    baseline = client.get("/api/device/settings")
+    assert baseline.status_code == 200
+    original_brightness = baseline.json["image_settings"]["brightness"]
+
+    def fail_commit(_prepared_settings):
+        raise RuntimeError("sqlite write failed")
+
+    monkeypatch.setattr(app.extensions["playback_controller"], "commit_prepared_settings", fail_commit)
+
+    response = client.patch(
+        "/api/settings",
+        json={
+            "device_settings": {
+                **baseline.json,
+                "image_settings": {
+                    **baseline.json["image_settings"],
+                    "brightness": 1.4,
+                },
+            },
+            "playback_settings": {
+                "default_timeout_seconds": 240,
+            },
+        },
+    )
+    assert response.status_code == 500
+    assert response.json["error"] == "Failed to save settings"
+
+    current = client.get("/api/device/settings")
+    assert current.status_code == 200
+    assert current.json["image_settings"]["brightness"] == original_brightness
+
+
 def test_duplicate_reuse_existing_with_auto_queue(client, sample_png_bytes):
     first = client.post(
         "/api/assets",
@@ -403,6 +513,77 @@ def test_duplicate_keep_both_creates_second_asset(client, sample_png_bytes):
     assert len(listed.json["items"]) == 2
 
 
+def test_multi_file_upload_is_atomic_on_validation_error(client, sample_png_bytes):
+    response = client.post(
+        "/api/assets",
+        data={
+            "files[]": [
+                (io.BytesIO(sample_png_bytes), "good.png"),
+                (io.BytesIO(b"not-an-image"), "bad.png"),
+            ],
+            "duplicate_policy": "keep_both",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+
+    listed = client.get("/api/assets")
+    assert listed.status_code == 200
+    assert listed.json["items"] == []
+
+    queue = client.get("/api/queue")
+    assert queue.status_code == 200
+    assert queue.json["items"] == []
+
+
+def test_upload_rollback_cleans_files_if_asset_creation_fails(client, app, sample_png_bytes, monkeypatch):
+    original_create_asset = app.extensions["asset_service"].assets_repo.create_asset
+
+    def fail_create_asset(record):
+        raise RuntimeError("db write failed")
+
+    monkeypatch.setattr(app.extensions["asset_service"].assets_repo, "create_asset", fail_create_asset)
+
+    response = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(sample_png_bytes), "broken.png")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 500
+
+    listed = client.get("/api/assets")
+    assert listed.status_code == 200
+    assert listed.json["items"] == []
+
+    media_store = app.extensions["asset_service"].media_store
+    assert list(media_store.originals_dir.iterdir()) == []
+    assert list(media_store.thumbnails_dir.iterdir()) == []
+
+    monkeypatch.setattr(app.extensions["asset_service"].assets_repo, "create_asset", original_create_asset)
+
+
+def test_heic_upload_reports_stored_mime_type(client, app):
+    image = Image.new("RGB", (64, 48), color=(12, 34, 56))
+    image.format = "HEIC"
+    app.extensions["asset_service"]._load_image = lambda filename, payload: image.copy()
+
+    response = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(b"fake-heic"), "sample.heic")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 201, response.json
+    asset = response.json["created"][0]
+    assert asset["mime_type"] == "image/png"
+    assert asset["extension"] == "png"
+    assert asset["source_mime_type"] == "image/heic"
+    assert asset["source_extension"] == "heic"
+
+    original = client.get(asset["original_url"])
+    assert original.status_code == 200
+    assert original.mimetype == "image/png"
+
+
 def test_queue_reorder_swaps_adjacent_items(client, sample_png_bytes):
     first = client.post(
         "/api/assets",
@@ -424,6 +605,26 @@ def test_queue_reorder_swaps_adjacent_items(client, sample_png_bytes):
     assert reordered.status_code == 200, reordered.json
     assert [item["id"] for item in reordered.json["items"]] == list(reversed(queue_ids))
     assert [item["position"] for item in reordered.json["items"]] == [0, 1]
+
+
+def test_queue_reorder_rejects_duplicate_ids(client, sample_png_bytes):
+    first = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(sample_png_bytes), "one.png")},
+        content_type="multipart/form-data",
+    )
+    second = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(make_png_bytes((90, 80, 70))), "two.png")},
+        content_type="multipart/form-data",
+    )
+    asset_ids = [first.json["created"][0]["id"], second.json["created"][0]["id"]]
+    queue_add = client.post("/api/queue/items", json={"asset_ids": asset_ids})
+    queue_ids = [item["id"] for item in queue_add.json["items"]]
+
+    reordered = client.post("/api/queue/reorder", json={"ordered_queue_item_ids": [queue_ids[0], queue_ids[0]]})
+    assert reordered.status_code == 400
+    assert "must match the existing queue exactly" in reordered.json["error"]
 
 
 def test_queue_initial_settings_are_validated(client, sample_png_bytes):
