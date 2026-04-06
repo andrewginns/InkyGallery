@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { Clock, Eye, Pause, Play, Repeat, Send, Shuffle } from 'lucide-react';
+import { Clock, Eye, FileText, Pause, Play, Repeat, Send, Shuffle } from 'lucide-react';
 import type { Asset, PlaybackSettings, PlaybackState, QueueItem } from '@/data/types';
 
 interface NowPlayingProps {
@@ -34,6 +40,18 @@ function formatTimeout(seconds: number): string {
   return `${mins}m ${seconds % 60}s`;
 }
 
+function formatFileSize(bytes: number | undefined): string {
+  if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(iso: string | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function NowPlaying({
   playbackState,
   playbackSettings,
@@ -46,6 +64,7 @@ export default function NowPlaying({
   onPreviewQueueItem,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
   const [timeRemaining, setTimeRemaining] = useState(
     playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
@@ -71,6 +90,8 @@ export default function NowPlaying({
   const hasQueue = queue.length > 0;
   const effectiveTimeout =
     activeQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
+  const selectedTimeout =
+    selectedQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
 
   useEffect(() => {
     if (playbackState.mode === 'paused' || !playbackState.display_expires_at) {
@@ -130,7 +151,15 @@ export default function NowPlaying({
   return (
     <div className="flex flex-col h-full">
       <div className="relative mx-4 mt-3 mb-2 rounded-xl overflow-hidden bg-black/90 shadow-lg shadow-black/20">
-        <div className="relative w-full" style={{ paddingBottom: '60%' }}>
+        <div
+          className={`relative w-full ${isIdle ? '' : 'cursor-zoom-in'}`}
+          style={{ paddingBottom: '60%' }}
+          onClick={() => {
+            if (!isIdle) {
+              setShowDetail(true);
+            }
+          }}
+        >
           {isIdle ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white/40 gap-2">
               <div className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center">
@@ -198,7 +227,10 @@ export default function NowPlaying({
                 </div>
                 <Button
                   size="sm"
-                  onClick={onApply}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onApply();
+                  }}
                   className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs h-7 px-3"
                 >
                   <Send className="w-3 h-3 mr-1" />
@@ -267,20 +299,15 @@ export default function NowPlaying({
         {queue.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <div>
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Queue Film Strip
-                </span>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {selectedQueueItem
-                    ? `${selectedQueueItem.position + 1} of ${queue.length}${
-                        selectedQueueItem.id === liveQueueItem?.id
-                          ? ' · live on device'
-                          : ' · selected for preview'
-                      }`
-                    : 'Tap a queued image to preview it here'}
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedQueueItem
+                  ? `${selectedQueueItem.position + 1} of ${queue.length}${
+                      selectedQueueItem.id === liveQueueItem?.id
+                        ? ' · live on device'
+                        : ' · selected for preview'
+                    }`
+                  : 'Tap a queued image to preview it here'}
+              </p>
               {liveQueueItem && (
                 <Badge
                   variant="secondary"
@@ -422,6 +449,122 @@ export default function NowPlaying({
           </p>
         )}
       </div>
+
+      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
+          {displayedAsset && (
+            <>
+              <div className="relative w-full bg-black">
+                <div style={{ paddingBottom: '75%' }} className="relative">
+                  <img
+                    src={displayedAsset.original_url || displayedUrl || ''}
+                    alt={displayedAsset.filename_original}
+                    className="absolute inset-0 w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <DialogHeader className="space-y-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <DialogTitle className="text-base min-w-0 truncate">
+                      {displayedAsset.filename_original}
+                    </DialogTitle>
+                    {selectedQueueItem && (
+                      <Badge variant="secondary" className="shrink-0">
+                        #{selectedQueueItem.position + 1}
+                      </Badge>
+                    )}
+                  </div>
+                  {displayedAsset.caption && (
+                    <p className="text-sm text-muted-foreground">{displayedAsset.caption}</p>
+                  )}
+                </DialogHeader>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>
+                      {isPreview ? 'Previewing' : isPaused ? 'Paused live' : 'Live on device'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatTimeout(selectedTimeout)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{formatFileSize(displayedAsset.file_size_bytes)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatDate(displayedAsset.created_at)}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                  <div className="rounded-xl bg-muted/60 px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                      Resolution
+                    </span>
+                    <span className="block mt-1">
+                      {displayedAsset.width} × {displayedAsset.height}
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-muted/60 px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                      Queue
+                    </span>
+                    <span className="block mt-1">
+                      {selectedQueueItem ? `Position ${selectedQueueItem.position + 1}` : 'Not queued'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  {isPreview ? (
+                    <>
+                      <Button
+                        size="sm"
+                        className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
+                        onClick={() => {
+                          onApply();
+                          setShowDetail(false);
+                        }}
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Apply
+                      </Button>
+                      {liveQueueItem && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1 h-9 text-xs rounded-lg"
+                          onClick={() => {
+                            onPreviewQueueItem(liveQueueItem.id);
+                            setShowDetail(false);
+                          }}
+                        >
+                          Back to Live
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full h-9 text-xs rounded-lg"
+                      onClick={() => setShowDetail(false)}
+                    >
+                      Close
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

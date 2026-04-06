@@ -203,11 +203,16 @@ export default function App() {
   }, [loading]);
 
   const handlePreviewQueueItem = (queueItemId: string) =>
-    withAction('Updating preview…', async () => {
+    (async () => {
+      setErrorMessage(null);
       setActiveTab('now-playing');
-      await previewPlayback({ queue_item_id: queueItemId });
-      await refreshPlaybackAndDisplay();
-    });
+      try {
+        await previewPlayback({ queue_item_id: queueItemId });
+        await refreshPlaybackAndDisplay();
+      } catch (error) {
+        setErrorMessage(extractErrorMessage(error));
+      }
+    })();
 
   const handleAddToQueue = (assetIds: string[]) =>
     withAction('Updating queue…', async () => {
