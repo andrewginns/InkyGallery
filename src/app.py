@@ -186,7 +186,10 @@ def create_app():
         frontend_dir = Path(app.config["FRONTEND_DIR"])
         candidate = frontend_dir / path
         if candidate.exists() and candidate.is_file():
-            return send_from_directory(frontend_dir, path)
+            response = send_from_directory(frontend_dir, path)
+            if path in {"sw.js", "manifest.webmanifest"}:
+                response.headers["Cache-Control"] = "no-cache"
+            return response
         if candidate.suffix:
             return {"error": "Frontend asset not found", "path": path}, 404
         if (frontend_dir / "index.html").exists():
