@@ -427,7 +427,7 @@ export default function NowPlaying({
             </div>
             <div
               ref={filmStripRef}
-              className="-mx-4 px-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="-mx-4 px-4 py-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               <div className="flex min-w-max gap-3">
                 {queue.map((item) => {
