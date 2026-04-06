@@ -290,6 +290,35 @@ export default function NowPlaying({
               </div>
             </div>
           )}
+
+          {!isPreview && !isIdle && !isRendering && selectedFitMode === 'cover' && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent p-3 pt-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {displayedAsset?.crop_profile && (
+                    <Badge
+                      variant="secondary"
+                      className="border-white/10 bg-black/45 text-[10px] text-white/85 backdrop-blur-md"
+                    >
+                      Saved crop
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setShowCropEditor(true);
+                  }}
+                  className="h-7 px-3 text-xs"
+                >
+                  <Crop className="mr-1 h-3 w-3" />
+                  Edit crop
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -312,26 +341,6 @@ export default function NowPlaying({
             </div>
           )}
         </div>
-
-        {!isIdle && displayedAsset && selectedFitMode === 'cover' && (
-          <div className="flex items-center gap-2 mb-4">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-8 text-xs gap-1.5 rounded-lg"
-              onClick={() => setShowCropEditor(true)}
-            >
-              <Crop className="w-3.5 h-3.5" />
-              Edit crop
-            </Button>
-            {displayedAsset.crop_profile && (
-              <Badge variant="secondary" className="text-[10px] px-2 py-0 h-6">
-                Saved crop
-              </Badge>
-            )}
-          </div>
-        )}
 
         {!isIdle && (
           <div className="flex items-center gap-3 mb-4">

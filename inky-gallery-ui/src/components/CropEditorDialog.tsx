@@ -133,11 +133,12 @@ export default function CropEditorDialog({
     setSavingMode(mode);
     try {
       if (mode === 'apply' && onSaveAndApply) {
+        onOpenChange(false);
         await onSaveAndApply(asset, cropProfile);
       } else {
         await onSave(asset, cropProfile);
+        onOpenChange(false);
       }
-      onOpenChange(false);
     } finally {
       setSavingMode(null);
     }
