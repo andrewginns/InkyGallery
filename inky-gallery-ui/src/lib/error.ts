@@ -5,6 +5,9 @@ export function extractErrorMessage(error: unknown) {
     return error.message;
   }
   if (error instanceof Error) {
+    if (error.message.includes('Failed to fetch')) {
+      return 'Could not reach InkyGallery. Please reload the page and try again.';
+    }
     return error.message;
   }
   return 'Something went wrong';

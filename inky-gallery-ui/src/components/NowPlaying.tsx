@@ -567,15 +567,24 @@ export default function NowPlaying({
         <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
           {displayedAsset && (
             <>
-              <div className="relative w-full bg-black">
-                <div style={{ aspectRatio: `${previewAspectRatio}` }} className="relative overflow-hidden">
-                  <img
-                    src={displayedAsset.original_url || displayedUrl || ''}
-                    alt={displayedAsset.filename_original}
-                    className={displayedCrop ? 'absolute max-w-none select-none' : 'absolute inset-0 w-full h-full object-contain'}
-                    style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
-                    draggable={false}
-                  />
+              <div className="relative w-full bg-black/90" style={{ paddingBottom: '60%' }}>
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <div
+                    style={{ aspectRatio: `${previewAspectRatio}` }}
+                    className="relative h-full max-w-full overflow-hidden rounded-lg"
+                  >
+                    <img
+                      src={displayedAsset.original_url || displayedUrl || ''}
+                      alt={displayedAsset.filename_original}
+                      className={
+                        displayedCrop
+                          ? 'absolute max-w-none select-none'
+                          : 'absolute inset-0 h-full w-full object-contain'
+                      }
+                      style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
+                      draggable={false}
+                    />
+                  </div>
                 </div>
               </div>
 
