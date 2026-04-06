@@ -61,6 +61,18 @@ def test_health_and_defaults(client):
     assert display_status.json["hardware"]["hardware_ready"] is False
 
 
+def test_verbose_health_stays_minimal_for_proxied_clients(client):
+    response = client.get(
+        "/health?verbose=1",
+        headers={
+            "X-Forwarded-For": "192.168.3.50",
+            "X-Real-IP": "192.168.3.50",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json == {"ok": True}
+
+
 def test_default_request_limit_supports_multi_file_batches(app):
     assert app.config["MAX_CONTENT_LENGTH"] >= AssetService.MAX_UPLOAD_BYTES * 2
 
@@ -537,8 +549,6 @@ def test_multi_file_upload_is_atomic_on_validation_error(client, sample_png_byte
 
 
 def test_upload_rollback_cleans_files_if_asset_creation_fails(client, app, sample_png_bytes, monkeypatch):
-    original_create_asset = app.extensions["asset_service"].assets_repo.create_asset
-
     def fail_create_asset(record):
         raise RuntimeError("db write failed")
 
@@ -558,8 +568,6 @@ def test_upload_rollback_cleans_files_if_asset_creation_fails(client, app, sampl
     media_store = app.extensions["asset_service"].media_store
     assert list(media_store.originals_dir.iterdir()) == []
     assert list(media_store.thumbnails_dir.iterdir()) == []
-
-    monkeypatch.setattr(app.extensions["asset_service"].assets_repo, "create_asset", original_create_asset)
 
 
 def test_heic_upload_reports_stored_mime_type(client, app):

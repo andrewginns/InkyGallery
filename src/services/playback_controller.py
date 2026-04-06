@@ -420,6 +420,8 @@ class PlaybackController:
             if self.stop_event.is_set():
                 break
             with self.lock:
+                if self.stop_event.is_set():
+                    break
                 settings = self.playback_repo.get_settings()
                 state = self.playback_repo.get_state()
                 if not settings["auto_advance_enabled"]:
