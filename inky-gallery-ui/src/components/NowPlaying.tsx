@@ -77,6 +77,7 @@ export default function NowPlaying({
   onSaveCropAndApply,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [hasLoadedPreviewFrame, setHasLoadedPreviewFrame] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showCropEditor, setShowCropEditor] = useState(false);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
@@ -152,6 +153,7 @@ export default function NowPlaying({
   useEffect(() => {
     if (!displayedUrl) {
       setImageLoaded(false);
+      setHasLoadedPreviewFrame(false);
       return;
     }
     setImageLoaded(loadedImageUrlsRef.current.has(displayedUrl));
@@ -218,6 +220,7 @@ export default function NowPlaying({
   };
   const statusLabel = modeLabel[effectiveMode];
   const statusClass = modeColor[effectiveMode];
+  const shouldKeepPreviewImageVisible = imageLoaded || hasLoadedPreviewFrame;
 
   return (
     <div className="flex flex-col h-full">
@@ -243,7 +246,19 @@ export default function NowPlaying({
             </div>
           ) : (
             <>
-              {!imageLoaded && <div className="absolute inset-0 animate-shimmer rounded-xl" />}
+              {!imageLoaded && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                  <div className="absolute inset-0 bg-black/55" />
+                  <div className="absolute inset-0 animate-preview-glow bg-preview-loader opacity-90" />
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 to-transparent" />
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-medium text-white/75 shadow-lg shadow-black/30 backdrop-blur-md">
+                      <span className="h-2 w-2 rounded-full bg-primary/80 animate-preview-loader-dot" />
+                      Loading preview…
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="absolute inset-0 flex items-center justify-center p-4">
                 <div
                   className="relative h-full max-w-full overflow-hidden rounded-lg"
@@ -255,7 +270,7 @@ export default function NowPlaying({
                     className={`absolute transition-opacity duration-500 ${
                       isRendering ? 'animate-rendering-image' : ''
                     } ${displayedCrop ? 'max-w-none select-none' : 'inset-0 h-full w-full object-contain'} ${
-                      imageLoaded ? 'opacity-100' : 'opacity-0'
+                      shouldKeepPreviewImageVisible ? 'opacity-100' : 'opacity-0'
                     }`}
                     style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
                     onLoad={(event) => {
@@ -266,6 +281,7 @@ export default function NowPlaying({
                         loadedImageUrlsRef.current.add(displayedUrl);
                       }
                       setImageLoaded(true);
+                      setHasLoadedPreviewFrame(true);
                     }}
                     onError={() => setImageLoaded(true)}
                   />

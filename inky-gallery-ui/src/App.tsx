@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Image as ImageIcon,
@@ -32,6 +32,7 @@ const tabs: { id: TabId; label: string; icon: typeof MonitorPlay }[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('now-playing');
   const [isRenderingToDevice, setIsRenderingToDevice] = useState(false);
+  const previousTabRef = useRef<TabId>('now-playing');
   const { busyMessage, errorMessage, setErrorMessage, runAction } = useActionState();
   const { themePreference, resolvedTheme, setThemePreference } = useTheme();
   const {
@@ -131,6 +132,19 @@ export default function App() {
     queue: 'Queue',
     settings: 'Settings',
   }[activeTab];
+
+  const previousTabIndex = tabs.findIndex((tab) => tab.id === previousTabRef.current);
+  const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
+  const pageTransitionClass =
+    activeTabIndex === previousTabIndex
+      ? 'animate-page-enter'
+      : activeTabIndex > previousTabIndex
+      ? 'animate-page-slide-left'
+      : 'animate-page-slide-right';
+
+  useEffect(() => {
+    previousTabRef.current = activeTab;
+  }, [activeTab]);
 
   const activeTabContent = (() => {
     switch (activeTab) {
@@ -244,7 +258,7 @@ export default function App() {
         ) : (
           <div
             key={activeTab}
-            className="h-full animate-page-enter"
+            className={`h-full ${pageTransitionClass}`}
           >
             {activeTabContent}
           </div>
