@@ -151,10 +151,8 @@ export default function NowPlaying({
     paused:
       'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30',
   };
-  const statusLabel = isRendering ? 'Applying' : modeLabel[effectiveMode];
-  const statusClass = isRendering
-    ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-    : modeColor[effectiveMode];
+  const statusLabel = modeLabel[effectiveMode];
+  const statusClass = modeColor[effectiveMode];
 
   return (
     <div className="flex flex-col h-full">
@@ -213,16 +211,18 @@ export default function NowPlaying({
             </>
           )}
 
-          <div className="absolute top-3 left-3 flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${statusClass}`}
-            >
-              {!isRendering && effectiveMode === 'displaying' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
-              )}
-              {statusLabel}
-            </span>
-          </div>
+          {!isRendering && (
+            <div className="absolute top-3 left-3 flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${statusClass}`}
+              >
+                {effectiveMode === 'displaying' && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
+                )}
+                {statusLabel}
+              </span>
+            </div>
+          )}
 
           {isPreview && (
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-amber-950/80 to-transparent p-3 pt-8">
