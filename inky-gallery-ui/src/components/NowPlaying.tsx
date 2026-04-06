@@ -564,7 +564,7 @@ export default function NowPlaying({
       </div>
 
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
-        <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
+        <DialogContent className="mx-auto flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-sm flex-col rounded-2xl p-0 overflow-hidden">
           {displayedAsset && (
             <>
               <div className="relative w-full bg-black/90" style={{ paddingBottom: '60%' }}>
@@ -588,10 +588,10 @@ export default function NowPlaying({
                 </div>
               </div>
 
-              <div className="p-4 space-y-4">
+              <div className="min-h-0 overflow-y-auto p-4 space-y-4">
                 <DialogHeader className="space-y-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <DialogTitle className="text-base min-w-0 truncate">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <DialogTitle className="min-w-0 flex-1 truncate text-base">
                       {displayedAsset.filename_original}
                     </DialogTitle>
                     {selectedQueueItem && (
