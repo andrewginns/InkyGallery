@@ -1,5 +1,7 @@
 import uuid
 
+from PIL import ImageColor
+
 from utils.timestamps import utcnow_iso
 
 
@@ -16,50 +18,26 @@ class QueueService:
         return {"items": [self._serialize_queue_item(item) for item in items]}
 
     def add_assets(self, asset_ids: list[str], initial_settings: dict | None = None):
-        initial_settings = initial_settings or {}
+        normalized_settings = self._normalize_queue_updates(initial_settings or {}, partial=False)
         created = []
-        next_position = self.queue_repo.next_position()
         now = utcnow_iso()
         for asset_id in asset_ids:
             if not self.assets_repo.get_asset(asset_id):
                 raise ValueError(f"Asset '{asset_id}' does not exist")
-            created_item = self.queue_repo.create_item(
+            created_item = self.queue_repo.append_item(
                 {
                     "id": uuid.uuid4().hex,
                     "asset_id": asset_id,
-                    "position": next_position,
-                    "enabled": initial_settings.get("enabled", True),
-                    "timeout_seconds_override": initial_settings.get("timeout_seconds_override"),
-                    "fit_mode": initial_settings.get("fit_mode", "cover"),
-                    "background_mode": initial_settings.get("background_mode", "blur"),
-                    "background_color": initial_settings.get("background_color"),
+                    **normalized_settings,
                     "created_at": now,
                     "updated_at": now,
                 }
             )
             created.append(self._serialize_queue_item(created_item))
-            next_position += 1
         return {"items": created}
 
     def update_item(self, queue_item_id: str, updates: dict):
-        normalized = {}
-        if "enabled" in updates:
-            normalized["enabled"] = int(bool(updates["enabled"]))
-        if "timeout_seconds_override" in updates:
-            timeout_value = updates["timeout_seconds_override"]
-            if timeout_value is not None and int(timeout_value) <= 0:
-                raise ValueError("timeout_seconds_override must be null or a positive integer")
-            normalized["timeout_seconds_override"] = timeout_value
-        if "fit_mode" in updates:
-            if updates["fit_mode"] not in self.VALID_FIT_MODES:
-                raise ValueError("fit_mode must be one of: cover, contain")
-            normalized["fit_mode"] = updates["fit_mode"]
-        if "background_mode" in updates:
-            if updates["background_mode"] not in self.VALID_BACKGROUND_MODES:
-                raise ValueError("background_mode must be one of: blur, solid, none")
-            normalized["background_mode"] = updates["background_mode"]
-        if "background_color" in updates:
-            normalized["background_color"] = updates["background_color"]
+        normalized = self._normalize_queue_updates(updates, partial=True)
         normalized["updated_at"] = utcnow_iso()
         item = self.queue_repo.update_item(queue_item_id, normalized)
         if not item:
@@ -67,7 +45,7 @@ class QueueService:
         return self._serialize_queue_item(item)
 
     def delete_item(self, queue_item_id: str):
-        self.queue_repo.delete_item(queue_item_id)
+        return self.queue_repo.delete_item(queue_item_id)
 
     def reorder(self, ordered_ids: list[str]):
         self.queue_repo.reorder(ordered_ids)
@@ -107,3 +85,63 @@ class QueueService:
                 "original_url": f"/api/assets/{item['asset_id']}/file",
             },
         }
+
+    def _normalize_queue_updates(self, updates: dict, partial: bool) -> dict:
+        normalized = {}
+
+        if not partial:
+            normalized.update(
+                {
+                    "enabled": True,
+                    "timeout_seconds_override": None,
+                    "fit_mode": "cover",
+                    "background_mode": "blur",
+                    "background_color": None,
+                }
+            )
+
+        allowed_keys = {
+            "enabled",
+            "timeout_seconds_override",
+            "fit_mode",
+            "background_mode",
+            "background_color",
+        }
+        unknown_keys = set(updates.keys()) - allowed_keys
+        if unknown_keys:
+            unknown = ", ".join(sorted(unknown_keys))
+            raise ValueError(f"Unsupported queue item fields: {unknown}")
+
+        if "enabled" in updates:
+            normalized["enabled"] = int(bool(updates["enabled"]))
+
+        if "timeout_seconds_override" in updates:
+            timeout_value = updates["timeout_seconds_override"]
+            if timeout_value is not None and int(timeout_value) <= 0:
+                raise ValueError("timeout_seconds_override must be null or a positive integer")
+            normalized["timeout_seconds_override"] = None if timeout_value is None else int(timeout_value)
+
+        if "fit_mode" in updates:
+            if updates["fit_mode"] not in self.VALID_FIT_MODES:
+                raise ValueError("fit_mode must be one of: cover, contain")
+            normalized["fit_mode"] = updates["fit_mode"]
+
+        if "background_mode" in updates:
+            if updates["background_mode"] not in self.VALID_BACKGROUND_MODES:
+                raise ValueError("background_mode must be one of: blur, solid, none")
+            normalized["background_mode"] = updates["background_mode"]
+
+        if "background_color" in updates:
+            background_color = updates["background_color"]
+            if background_color is not None:
+                try:
+                    ImageColor.getcolor(background_color, "RGB")
+                except ValueError as exc:
+                    raise ValueError("background_color must be a valid CSS-style color value") from exc
+            normalized["background_color"] = background_color
+
+        background_mode = normalized.get("background_mode")
+        if background_mode == "solid" and normalized.get("background_color") is None:
+            normalized["background_color"] = "#ffffff"
+
+        return normalized

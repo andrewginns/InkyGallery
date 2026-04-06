@@ -1,10 +1,14 @@
 import atexit
+import ipaddress
 import logging.config
 import logging
 import os
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
-from flask import Flask, send_from_directory
+import psutil
+from flask import Flask, jsonify, request, send_from_directory
 from PIL import Image
 
 try:
@@ -45,6 +49,44 @@ def _resolve_frontend_dir() -> Path:
     return preferred if preferred.exists() else legacy
 
 
+def _normalize_host(host: str | None) -> str | None:
+    if not host:
+        return None
+    normalized = host.strip().lower()
+    if normalized.startswith("[") and "]" in normalized:
+        normalized = normalized[1:normalized.index("]")]
+    elif ":" in normalized and normalized.count(":") == 1:
+        normalized = normalized.split(":", 1)[0]
+    return normalized
+
+
+def _discover_trusted_hosts() -> set[str]:
+    hosts = {"localhost", "127.0.0.1", "::1"}
+
+    configured = os.getenv("INKYGALLERY_TRUSTED_HOSTS", "")
+    hosts.update(filter(None, (_normalize_host(value) for value in configured.split(","))))
+
+    hostname = socket.gethostname().strip().lower()
+    if hostname:
+        hosts.add(hostname)
+        hosts.add(f"{hostname}.local")
+
+    for addresses in psutil.net_if_addrs().values():
+        for address in addresses:
+            value = getattr(address, "address", "")
+            host = _normalize_host(value.split("%", 1)[0] if "%" in value else value)
+            if not host:
+                continue
+            try:
+                parsed = ipaddress.ip_address(host)
+            except ValueError:
+                continue
+            if parsed.is_loopback or parsed.is_private or parsed.is_link_local:
+                hosts.add(host)
+
+    return hosts
+
+
 def create_app():
     logging.config.fileConfig(str(SRC_DIR / "config" / "logging.conf"), disable_existing_loggers=False)
     if register_heif_opener is not None:
@@ -53,8 +95,10 @@ def create_app():
         logging.getLogger(__name__).warning("pi_heif not installed; HEIF/HEIC uploads will not be available")
 
     app = Flask(__name__)
-    app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
+    default_request_limit = AssetService.MAX_UPLOAD_BYTES + (2 * 1024 * 1024)
+    app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("INKYGALLERY_MAX_REQUEST_BYTES", default_request_limit))
     app.config["FRONTEND_DIR"] = _resolve_frontend_dir()
+    app.config["TRUSTED_HOSTS"] = _discover_trusted_hosts()
 
     data_dir = _path_from_env("INKYGALLERY_DATA_DIR", SRC_DIR / "data")
     device_config_path = _path_from_env("INKYGALLERY_DEVICE_CONFIG_PATH", SRC_DIR / "config" / "device.json")
@@ -81,6 +125,31 @@ def create_app():
     app.register_blueprint(create_queue_blueprint(queue_service, playback_controller))
     app.register_blueprint(create_playback_blueprint(playback_controller))
     app.register_blueprint(create_device_blueprint(device_settings_service, playback_controller, media_store))
+
+    @app.before_request
+    def reject_untrusted_hosts():
+        host = _normalize_host(request.host)
+        if host and host not in app.config["TRUSTED_HOSTS"]:
+            return jsonify({"error": "Untrusted host"}), 403
+        return None
+
+    @app.before_request
+    def reject_cross_site_mutations():
+        if request.method not in {"POST", "PATCH", "PUT", "DELETE"}:
+            return None
+        if not request.path.startswith("/api/"):
+            return None
+
+        sec_fetch_site = request.headers.get("Sec-Fetch-Site", "").lower()
+        if sec_fetch_site and sec_fetch_site not in {"same-origin", "same-site", "none"}:
+            return jsonify({"error": "Cross-site browser requests are not allowed"}), 403
+
+        origin = request.headers.get("Origin")
+        if origin:
+            origin_host = _normalize_host(urlparse(origin).netloc)
+            if origin_host and origin_host not in app.config["TRUSTED_HOSTS"]:
+                return jsonify({"error": "Cross-site browser requests are not allowed"}), 403
+        return None
 
     @app.get("/health")
     def health():

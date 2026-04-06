@@ -35,6 +35,8 @@ def create_playback_blueprint(playback_controller):
             state = playback_controller.apply_preview()
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
         return jsonify(state)
 
     @blueprint.post("/api/playback/next")
@@ -43,6 +45,8 @@ def create_playback_blueprint(playback_controller):
             state = playback_controller.next()
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
         return jsonify(state)
 
     @blueprint.post("/api/playback/previous")
@@ -51,6 +55,8 @@ def create_playback_blueprint(playback_controller):
             state = playback_controller.previous()
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
         return jsonify(state)
 
     @blueprint.post("/api/playback/pause")
@@ -66,4 +72,3 @@ def create_playback_blueprint(playback_controller):
         return jsonify(state)
 
     return blueprint
-

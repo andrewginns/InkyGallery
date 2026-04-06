@@ -1,8 +1,12 @@
+import logging
 import random
 import threading
 from datetime import datetime, timezone
 
 from utils.timestamps import utcnow_iso
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlaybackController:
@@ -124,15 +128,19 @@ class PlaybackController:
         return self._commit_direction("previous")
 
     def pause(self):
-        state = self.playback_repo.update_state(
-            {
-                "mode": "paused",
-                "display_expires_at": None,
-                "updated_at": utcnow_iso(),
-            }
-        )
-        self.wake_event.set()
-        return state
+        with self.lock:
+            current_state = self.playback_repo.get_state()
+            state = self.playback_repo.update_state(
+                {
+                    "preview_queue_item_id": None,
+                    "preview_asset_id": None,
+                    "mode": "paused" if current_state.get("active_asset_id") else "idle",
+                    "display_expires_at": None,
+                    "updated_at": utcnow_iso(),
+                }
+            )
+            self.wake_event.set()
+            return state
 
     def resume(self):
         with self.lock:
@@ -143,6 +151,8 @@ class PlaybackController:
             now = datetime.now(timezone.utc)
             state = self.playback_repo.update_state(
                 {
+                    "preview_queue_item_id": None,
+                    "preview_asset_id": None,
                     "mode": "displaying",
                     "display_started_at": now.isoformat(),
                     "display_expires_at": self._future_iso(now, timeout_seconds),
@@ -337,6 +347,20 @@ class PlaybackController:
                         self.playback_repo.update_state(
                             {
                                 "mode": "idle",
+                                "display_expires_at": None,
+                                "updated_at": utcnow_iso(),
+                            }
+                        )
+                    except Exception:
+                        logger.exception("Failed to auto-advance playback")
+                        fallback_mode = (
+                            "preview"
+                            if state.get("preview_asset_id")
+                            else ("paused" if state.get("active_asset_id") else "idle")
+                        )
+                        self.playback_repo.update_state(
+                            {
+                                "mode": fallback_mode,
                                 "display_expires_at": None,
                                 "updated_at": utcnow_iso(),
                             }

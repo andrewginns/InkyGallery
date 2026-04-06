@@ -3,15 +3,18 @@ import io
 import mimetypes
 import os
 import uuid
+import warnings
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from utils.timestamps import utcnow_iso
 
 
 class AssetService:
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "avif", "heif", "heic"}
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+    MAX_IMAGE_PIXELS = 32_000_000
 
     def __init__(self, assets_repo, queue_repo, media_store):
         self.assets_repo = assets_repo
@@ -28,7 +31,7 @@ class AssetService:
             if not filename or extension not in self.ALLOWED_EXTENSIONS:
                 raise ValueError(f"Unsupported file type for '{filename or 'upload'}'")
 
-            payload = file.read()
+            payload = self._read_limited_upload(file)
             if not payload:
                 raise ValueError(f"Uploaded file '{filename}' is empty")
 
@@ -46,13 +49,11 @@ class AssetService:
                 )
                 if duplicate_policy == "reuse_existing":
                     if auto_add_to_queue:
-                        next_position = self.queue_repo.next_position()
                         now = utcnow_iso()
-                        self.queue_repo.create_item(
+                        self.queue_repo.append_item(
                             {
                                 "id": uuid.uuid4().hex,
                                 "asset_id": existing["id"],
-                                "position": next_position,
                                 "enabled": True,
                                 "timeout_seconds_override": None,
                                 "fit_mode": "cover",
@@ -66,8 +67,7 @@ class AssetService:
                     continue
 
             asset_id = uuid.uuid4().hex
-            image = Image.open(io.BytesIO(payload))
-            image = ImageOps.exif_transpose(image)
+            image = self._load_image(filename, payload)
             stored_name = f"original.{extension}"
             buffer = io.BytesIO()
             save_format = image.format or extension.upper()
@@ -78,48 +78,49 @@ class AssetService:
                 stored_name = "original.png"
             image.save(buffer, format=save_format)
             normalized_payload = buffer.getvalue()
-            stored_name, original_path = self.media_store.save_original_bytes(asset_id, stored_name, normalized_payload)
-
             now = utcnow_iso()
-            asset = self.assets_repo.create_asset(
-                {
-                    "id": asset_id,
-                    "filename_original": filename,
-                    "filename_stored": stored_name,
-                    "mime_type": mimetypes.guess_type(filename)[0] or "application/octet-stream",
-                    "extension": extension,
-                    "checksum_sha256": checksum,
-                    "width": image.size[0],
-                    "height": image.size[1],
-                    "file_size_bytes": len(normalized_payload),
-                    "favorite": False,
-                    "caption": None,
-                    "source_type": "upload",
-                    "created_at": now,
-                    "updated_at": now,
-                    "deleted_at": None,
-                }
-            )
-
-            self._create_thumbnail(asset_id, image.copy(), "thumbnail_sm", "sm.webp", 256)
-            self._create_thumbnail(asset_id, image.copy(), "thumbnail_md", "md.webp", 768)
-
-            if auto_add_to_queue:
-                next_position = self.queue_repo.next_position()
-                self.queue_repo.create_item(
+            try:
+                stored_name, _ = self.media_store.save_original_bytes(asset_id, stored_name, normalized_payload)
+                asset = self.assets_repo.create_asset(
                     {
-                        "id": uuid.uuid4().hex,
-                        "asset_id": asset_id,
-                        "position": next_position,
-                        "enabled": True,
-                        "timeout_seconds_override": None,
-                        "fit_mode": "cover",
-                        "background_mode": "blur",
-                        "background_color": None,
+                        "id": asset_id,
+                        "filename_original": filename,
+                        "filename_stored": stored_name,
+                        "mime_type": mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                        "extension": extension,
+                        "checksum_sha256": checksum,
+                        "width": image.size[0],
+                        "height": image.size[1],
+                        "file_size_bytes": len(normalized_payload),
+                        "favorite": False,
+                        "caption": None,
+                        "source_type": "upload",
                         "created_at": now,
                         "updated_at": now,
+                        "deleted_at": None,
                     }
                 )
+                self._create_thumbnail(asset_id, image.copy(), "thumbnail_sm", "sm.webp", 256)
+                self._create_thumbnail(asset_id, image.copy(), "thumbnail_md", "md.webp", 768)
+
+                if auto_add_to_queue:
+                    self.queue_repo.append_item(
+                        {
+                            "id": uuid.uuid4().hex,
+                            "asset_id": asset_id,
+                            "enabled": True,
+                            "timeout_seconds_override": None,
+                            "fit_mode": "cover",
+                            "background_mode": "blur",
+                            "background_color": None,
+                            "created_at": now,
+                            "updated_at": now,
+                        }
+                    )
+            except Exception:
+                self.assets_repo.delete_asset(asset_id)
+                self.media_store.delete_asset_files(asset_id)
+                raise
             created.append(asset)
 
         return {"created": [self.serialize_asset(asset["id"]) for asset in created], "duplicates": duplicates}
@@ -205,3 +206,37 @@ class AssetService:
         if not variant:
             return None
         return Path(variant["path"])
+
+    def _read_limited_upload(self, file) -> bytes:
+        max_bytes = self.MAX_UPLOAD_BYTES
+        chunks = []
+        total = 0
+
+        while True:
+            chunk = file.stream.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError(f"Uploaded file '{file.filename or 'upload'}' exceeds the {max_bytes // (1024 * 1024)} MB limit")
+            chunks.append(chunk)
+
+        return b"".join(chunks)
+
+    def _load_image(self, filename: str, payload: bytes) -> Image.Image:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                image = Image.open(io.BytesIO(payload))
+                width, height = image.size
+                if width * height > self.MAX_IMAGE_PIXELS:
+                    raise ValueError(
+                        f"Uploaded image '{filename}' exceeds the {self.MAX_IMAGE_PIXELS // 1_000_000} megapixel limit"
+                    )
+                image.load()
+                image = ImageOps.exif_transpose(image)
+                return image
+        except ValueError:
+            raise
+        except (UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+            raise ValueError(f"Uploaded file '{filename}' is not a supported image") from exc

@@ -27,6 +27,15 @@ class Database:
     def initialize(self, schema_path: Path):
         with self.connection() as conn:
             conn.executescript(Path(schema_path).read_text())
+            # Earlier builds created this as a unique index, which breaks duplicate_policy=keep_both.
+            conn.execute("DROP INDEX IF EXISTS idx_assets_checksum_live")
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_assets_checksum_live
+                ON assets(checksum_sha256)
+                WHERE deleted_at IS NULL
+                """
+            )
             conn.execute(
                 """
                 INSERT OR IGNORE INTO playback_settings
@@ -43,4 +52,3 @@ class Database:
                     (1, 'idle', CURRENT_TIMESTAMP)
                 """
             )
-

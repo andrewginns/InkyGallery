@@ -19,8 +19,10 @@ class DisplayManager:
         if settings.get("inverted_image"):
             image = image.rotate(180)
         image = apply_image_enhancement(image, settings.get("image_settings", {}))
+        display_result = self.display.display_image(image)
+        if not display_result.get("success"):
+            raise RuntimeError(display_result.get("reason") or "Failed to update the Inky display")
         image.save(self.current_image_path)
-        self.display.display_image(image)
         return image
 
     def get_status(self):

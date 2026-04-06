@@ -85,14 +85,18 @@ class InkyDisplay(AbstractDisplay):
 
         if not self.hardware_enabled:
             logger.info("Hardware output skipped; current image file updated only.")
-            return
+            return {"success": True, "hardware_updated": False, "reason": None}
 
         if not self.hardware_ready or self.inky_display is None:
             logger.warning("Inky hardware not ready; attempting reinitialization before display.")
             self.initialize_display()
             if not self.hardware_ready or self.inky_display is None:
                 logger.warning("Inky hardware still not ready; current image file updated only.")
-                return
+                return {
+                    "success": False,
+                    "hardware_updated": False,
+                    "reason": self.init_error or "Inky hardware is not ready",
+                }
 
         # Display the image on the Inky display
         inky_saturation = self.device_config.get_config('image_settings').get("inky_saturation", 0.5)
@@ -102,10 +106,12 @@ class InkyDisplay(AbstractDisplay):
             self.inky_display.show()
             self.init_error = None
             self.hardware_ready = True
+            return {"success": True, "hardware_updated": True, "reason": None}
         except BaseException as exc:  # pragma: no cover - requires live hardware contention/failure
             self.init_error = str(exc)
             self.hardware_ready = False
             logger.exception("Failed while updating the Inky display")
+            return {"success": False, "hardware_updated": False, "reason": self.init_error}
 
     def get_status(self):
         return {

@@ -16,6 +16,17 @@ def _merge_defaults(current: dict, defaults: dict) -> dict:
 
 
 class DeviceSettingsService:
+    MUTABLE_KEYS = {
+        "name",
+        "orientation",
+        "inverted_image",
+        "timezone",
+        "time_format",
+        "log_system_stats",
+        "image_settings",
+    }
+    IMAGE_SETTING_KEYS = {"saturation", "contrast", "sharpness", "brightness", "inky_saturation"}
+
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,10 +67,23 @@ class DeviceSettingsService:
         return int(width), int(height)
 
     def update_settings(self, updates: dict) -> dict:
+        unknown_keys = set(updates.keys()) - self.MUTABLE_KEYS
+        if unknown_keys:
+            unknown = ", ".join(sorted(unknown_keys))
+            raise ValueError(f"Unsupported device setting fields: {unknown}")
+
         settings = self.get_settings()
-        image_updates = updates.pop("image_settings", None)
-        settings.update(updates)
-        if image_updates:
+        has_image_updates = "image_settings" in updates
+        image_updates = updates.get("image_settings")
+        top_level_updates = {key: value for key, value in updates.items() if key != "image_settings"}
+        settings.update(top_level_updates)
+        if has_image_updates:
+            if not isinstance(image_updates, dict):
+                raise ValueError("image_settings must be an object")
+            unknown_image_keys = set(image_updates.keys()) - self.IMAGE_SETTING_KEYS
+            if unknown_image_keys:
+                unknown = ", ".join(sorted(unknown_image_keys))
+                raise ValueError(f"Unsupported image_settings fields: {unknown}")
             settings["image_settings"] = _merge_defaults(image_updates, settings.get("image_settings", {}))
         self.validate_settings(settings)
         self.save_settings(settings)
@@ -73,10 +97,26 @@ class DeviceSettingsService:
         return settings
 
     def validate_settings(self, settings: dict):
+        if not isinstance(settings.get("name"), str) or not settings["name"].strip():
+            raise ValueError("name must be a non-empty string")
         if settings.get("orientation") not in {"horizontal", "vertical"}:
             raise ValueError("orientation must be one of: horizontal, vertical")
         if settings.get("time_format") not in {"12h", "24h"}:
             raise ValueError("time_format must be one of: 12h, 24h")
+        if not isinstance(settings.get("inverted_image"), bool):
+            raise ValueError("inverted_image must be a boolean")
+        if not isinstance(settings.get("log_system_stats"), bool):
+            raise ValueError("log_system_stats must be a boolean")
+        resolution = settings.get("resolution")
+        if (
+            not isinstance(resolution, (list, tuple))
+            or len(resolution) != 2
+            or any(not isinstance(value, (int, float)) for value in resolution)
+        ):
+            raise ValueError("resolution must contain exactly two numeric values")
+        width, height = (int(resolution[0]), int(resolution[1]))
+        if width <= 0 or height <= 0 or width > 4096 or height > 4096:
+            raise ValueError("resolution values must be between 1 and 4096")
         image_settings = settings.get("image_settings", {})
         for key in ("saturation", "contrast", "sharpness", "brightness"):
             value = float(image_settings.get(key, 1.0))

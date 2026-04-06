@@ -36,7 +36,9 @@ def create_queue_blueprint(queue_service, playback_controller):
 
     @blueprint.delete("/api/queue/items/<queue_item_id>")
     def delete_queue_item(queue_item_id: str):
-        queue_service.delete_item(queue_item_id)
+        deleted = queue_service.delete_item(queue_item_id)
+        if not deleted:
+            return jsonify({"error": "Queue item not found"}), 404
         playback_controller.reconcile_state()
         playback_controller.wake_event.set()
         return jsonify({"success": True})

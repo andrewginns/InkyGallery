@@ -10,8 +10,15 @@ def create_assets_blueprint(asset_service, playback_controller):
         sort = request.args.get("sort", "uploaded_newest")
         favorite = request.args.get("favorite")
         favorite = None if favorite is None else favorite.lower() == "true"
-        limit = int(request.args.get("limit", "50"))
-        cursor = int(request.args.get("cursor", "0"))
+        try:
+            limit = int(request.args.get("limit", "50"))
+            cursor = int(request.args.get("cursor", "0"))
+        except ValueError:
+            return jsonify({"error": "limit and cursor must be integers"}), 400
+        if limit <= 0 or limit > 200:
+            return jsonify({"error": "limit must be between 1 and 200"}), 400
+        if cursor < 0:
+            return jsonify({"error": "cursor must be zero or greater"}), 400
         return jsonify(asset_service.list_assets(q=q, sort=sort, favorite=favorite, limit=limit, cursor=cursor))
 
     @blueprint.post("/api/assets")
@@ -20,6 +27,8 @@ def create_assets_blueprint(asset_service, playback_controller):
         if not files:
             return jsonify({"error": "files[] is required"}), 400
         duplicate_policy = request.form.get("duplicate_policy", "reject")
+        if duplicate_policy not in {"reject", "reuse_existing", "keep_both"}:
+            return jsonify({"error": "duplicate_policy must be one of: reject, reuse_existing, keep_both"}), 400
         auto_add_to_queue = request.form.get("auto_add_to_queue", "false").lower() == "true"
         try:
             result = asset_service.ingest_uploads(files, duplicate_policy=duplicate_policy, auto_add_to_queue=auto_add_to_queue)

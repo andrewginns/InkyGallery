@@ -48,11 +48,6 @@ class QueueRepository:
             ).fetchone()
         return dict(row) if row else None
 
-    def next_position(self) -> int:
-        with self.database.connection() as conn:
-            row = conn.execute("SELECT COALESCE(MAX(position), -1) AS position FROM queue_items").fetchone()
-        return int(row["position"]) + 1
-
     def create_item(self, item: dict[str, Any]):
         with self.database.connection() as conn:
             conn.execute(
@@ -77,6 +72,32 @@ class QueueRepository:
             )
         return self.get_item(item["id"])
 
+    def append_item(self, item: dict[str, Any]):
+        with self.database.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO queue_items (
+                    id, asset_id, position, enabled, timeout_seconds_override,
+                    fit_mode, background_mode, background_color, created_at, updated_at
+                )
+                SELECT
+                    ?, ?, COALESCE(MAX(position) + 1, 0), ?, ?, ?, ?, ?, ?, ?
+                FROM queue_items
+                """,
+                (
+                    item["id"],
+                    item["asset_id"],
+                    int(item.get("enabled", True)),
+                    item.get("timeout_seconds_override"),
+                    item.get("fit_mode", "cover"),
+                    item.get("background_mode", "blur"),
+                    item.get("background_color"),
+                    item["created_at"],
+                    item["updated_at"],
+                ),
+            )
+        return self.get_item(item["id"])
+
     def update_item(self, queue_item_id: str, updates: dict[str, Any]):
         if not updates:
             return self.get_item(queue_item_id)
@@ -88,8 +109,11 @@ class QueueRepository:
 
     def delete_item(self, queue_item_id: str):
         with self.database.connection() as conn:
-            conn.execute("DELETE FROM queue_items WHERE id = ?", (queue_item_id,))
-        self.normalize_positions()
+            cursor = conn.execute("DELETE FROM queue_items WHERE id = ?", (queue_item_id,))
+            deleted = cursor.rowcount > 0
+        if deleted:
+            self.normalize_positions()
+        return deleted
 
     def clear_asset_references(self, asset_id: str):
         with self.database.connection() as conn:
@@ -107,6 +131,12 @@ class QueueRepository:
         if existing != set(ordered_ids):
             raise ValueError("Ordered queue item ids must match the existing queue exactly.")
         with self.database.connection() as conn:
+            temp_offset = len(ordered_ids)
+            for position, queue_item_id in enumerate(ordered_ids):
+                conn.execute(
+                    "UPDATE queue_items SET position = ? WHERE id = ?",
+                    (position + temp_offset, queue_item_id),
+                )
             for position, queue_item_id in enumerate(ordered_ids):
                 conn.execute(
                     "UPDATE queue_items SET position = ? WHERE id = ?",

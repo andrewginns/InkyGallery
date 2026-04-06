@@ -76,8 +76,17 @@ export async function fetchBootstrap(): Promise<AppBootstrap> {
 }
 
 export async function listAssets(): Promise<Asset[]> {
-  const data = await apiRequest<{ items: Asset[] }>('/api/assets');
-  return data.items;
+  const items: Asset[] = [];
+  let cursor: number | null = 0;
+
+  while (cursor !== null) {
+    const query: string = cursor ? `?cursor=${cursor}` : '';
+    const data: { items: Asset[]; next_cursor: number | null } = await apiRequest(`/api/assets${query}`);
+    items.push(...data.items);
+    cursor = data.next_cursor;
+  }
+
+  return items;
 }
 
 export async function uploadAssets(files: File[], options: UploadOptions): Promise<{ created: Asset[] }> {

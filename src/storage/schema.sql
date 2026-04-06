@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS assets (
     deleted_at TEXT
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_checksum_live
+CREATE INDEX IF NOT EXISTS idx_assets_checksum_live
 ON assets(checksum_sha256)
 WHERE deleted_at IS NULL;
 
@@ -72,4 +72,3 @@ CREATE TABLE IF NOT EXISTS playback_state (
     last_rendered_at TEXT,
     updated_at TEXT NOT NULL
 );
-
