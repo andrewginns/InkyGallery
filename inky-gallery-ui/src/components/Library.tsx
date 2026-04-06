@@ -89,6 +89,12 @@ export default function Library({
   onDelete,
   busy = false,
 }: LibraryProps) {
+  type PendingUpload = {
+    id: string;
+    file: File;
+    previewUrl: string;
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState('uploaded_newest');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -99,7 +105,7 @@ export default function Library({
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState<'reject' | 'reuse_existing' | 'keep_both'>('reuse_existing');
   const [autoAddToQueue, setAutoAddToQueue] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -115,6 +121,18 @@ export default function Library({
       setDetailAsset(latestAsset);
     }
   }, [assets, detailAsset]);
+
+  const clearPendingUploads = () => {
+    setPendingUploads((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  useEffect(() => clearPendingUploads, []);
 
   const filteredAssets = assets
     .filter((a) => {
@@ -174,22 +192,43 @@ export default function Library({
 
   const handleChooseFiles = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    setPendingFiles(files);
+    setPendingUploads((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return files.map((file) => ({
+        id: `${file.name}-${file.lastModified}-${file.size}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+    });
   };
 
   const handleSubmitUpload = () => {
-    if (pendingFiles.length === 0) {
+    if (pendingUploads.length === 0) {
       fileInputRef.current?.click();
       return;
     }
-    onUpload(pendingFiles, { duplicatePolicy, autoAddToQueue });
-    setPendingFiles([]);
+    onUpload(
+      pendingUploads.map((item) => item.file),
+      { duplicatePolicy, autoAddToQueue }
+    );
+    clearPendingUploads();
     setAutoAddToQueue(false);
     setDuplicatePolicy('reuse_existing');
     setShowUploadDialog(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  };
+
+  const removePendingUpload = (uploadId: string) => {
+    setPendingUploads((current) => {
+      const next = current.filter((item) => item.id !== uploadId);
+      const removed = current.find((item) => item.id === uploadId);
+      if (removed) {
+        URL.revokeObjectURL(removed.previewUrl);
+      }
+      if (next.length === 0 && fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return next;
+    });
   };
 
   const detailPreviewAspectRatio = detailAsset ? getPreviewAspectRatio(deviceSettings) : 1;
@@ -610,7 +649,17 @@ export default function Library({
       />
 
       {/* Upload Dialog */}
-      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+      <Dialog
+        open={showUploadDialog}
+        onOpenChange={(open) => {
+          setShowUploadDialog(open);
+          if (!open) {
+            clearPendingUploads();
+            setAutoAddToQueue(false);
+            setDuplicatePolicy('reuse_existing');
+          }
+        }}
+      >
         <DialogContent className="max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>Upload Images</DialogTitle>
@@ -628,10 +677,14 @@ export default function Library({
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium">
-                  {pendingFiles.length > 0 ? `${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'} selected` : 'Tap to choose files'}
+                  {pendingUploads.length > 0
+                    ? `${pendingUploads.length} file${pendingUploads.length === 1 ? '' : 's'} selected`
+                    : 'Tap to choose files'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  PNG, JPG, WEBP, HEIC up to 20MB each
+                  {pendingUploads.length > 0
+                    ? 'Tap again to replace this selection'
+                    : 'PNG, JPG, WEBP, HEIC up to 20MB each'}
                 </p>
               </div>
             </button>
@@ -644,13 +697,51 @@ export default function Library({
               onChange={handleChooseFiles}
             />
 
-            {pendingFiles.length > 0 && (
-              <div className="rounded-xl border border-border/60 bg-card px-3 py-2 text-xs text-muted-foreground max-h-28 overflow-auto">
-                {pendingFiles.map((file) => (
-                  <p key={`${file.name}-${file.lastModified}`} className="truncate">
-                    {file.name}
+            {pendingUploads.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Review before upload
                   </p>
-                ))}
+                  <p className="text-[11px] text-muted-foreground/70">
+                    {pendingUploads.length} selected
+                  </p>
+                </div>
+                <div className="max-h-52 overflow-auto rounded-xl border border-border/60 bg-card p-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {pendingUploads.map((upload) => (
+                      <div
+                        key={upload.id}
+                        className="rounded-lg border border-border/50 bg-background/80 p-2"
+                      >
+                        <div className="relative aspect-[3/4] overflow-hidden rounded-md bg-muted">
+                          <img
+                            src={upload.previewUrl}
+                            alt={upload.file.name}
+                            className="h-full w-full object-cover"
+                            draggable={false}
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white transition hover:bg-black/75"
+                            onClick={() => removePendingUpload(upload.id)}
+                            aria-label={`Remove ${upload.file.name}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="mt-2 space-y-0.5">
+                          <p className="truncate text-xs font-medium">
+                            {upload.file.name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {formatFileSize(upload.file.size)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -694,7 +785,7 @@ export default function Library({
               disabled={busy}
             >
               <Upload className="w-4 h-4" />
-              {pendingFiles.length > 0 ? 'Upload Files' : 'Choose Files'}
+              {pendingUploads.length > 0 ? `Upload ${pendingUploads.length} file${pendingUploads.length === 1 ? '' : 's'}` : 'Choose Files'}
             </Button>
           </div>
         </DialogContent>
