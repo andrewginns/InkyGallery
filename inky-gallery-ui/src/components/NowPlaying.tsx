@@ -84,9 +84,12 @@ export default function NowPlaying({
   const liveQueueItem = activeQueueItem;
   const selectedQueueItem = previewQueueItem || liveQueueItem;
 
-  const isPreview = playbackState.mode === 'preview';
+  const effectiveMode: PlaybackState['mode'] = isRendering
+    ? (playbackState.active_asset_id || playbackState.preview_asset_id ? 'displaying' : 'idle')
+    : playbackState.mode;
+  const isPreview = effectiveMode === 'preview';
   const isPaused = playbackState.mode === 'paused';
-  const isIdle = playbackState.mode === 'idle';
+  const isIdle = effectiveMode === 'idle';
   const hasQueue = queue.length > 0;
   const effectiveTimeout =
     activeQueueItem?.timeout_seconds_override ?? playbackSettings.default_timeout_seconds;
@@ -207,12 +210,12 @@ export default function NowPlaying({
 
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${modeColor[playbackState.mode]}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md ${modeColor[effectiveMode]}`}
             >
-              {playbackState.mode === 'displaying' && (
+              {effectiveMode === 'displaying' && (
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
               )}
-              {modeLabel[playbackState.mode]}
+              {modeLabel[effectiveMode]}
             </span>
           </div>
 
@@ -485,7 +488,7 @@ export default function NowPlaying({
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Eye className="w-3.5 h-3.5" />
                     <span>
-                      {isPreview ? 'Previewing' : isPaused ? 'Paused live' : 'Live on device'}
+                      {isRendering ? 'Applying to device' : isPreview ? 'Previewing' : isPaused ? 'Paused live' : 'Live on device'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
