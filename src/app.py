@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import psutil
 from flask import Flask, jsonify, request, send_from_directory
 from PIL import Image
+from werkzeug.exceptions import RequestEntityTooLarge
 
 try:
     from pi_heif import register_heif_opener
@@ -161,6 +162,15 @@ def create_app():
             "device_config_path": str(device_config_path),
             "current_image_path": str(current_image_path),
         }
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_request_entity_too_large(error):
+        message = (
+            f"Upload too large. Max {AssetService.MAX_UPLOAD_BYTES // (1024 * 1024)} MiB per file."
+        )
+        if request.path.startswith("/api/"):
+            return jsonify({"error": message}), 413
+        return message, 413
 
     @app.get("/")
     def frontend_index():

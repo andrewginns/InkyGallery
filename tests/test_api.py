@@ -99,6 +99,20 @@ def test_asset_list_paginates_with_next_cursor(client):
     assert second_page.json["next_cursor"] is None
 
 
+def test_upload_limit_returns_json_error(client, app):
+    app.config["MAX_CONTENT_LENGTH"] = 32
+    response = client.post(
+        "/api/assets",
+        data={
+            "files[]": (io.BytesIO(make_png_bytes((255, 0, 0))), "too-large.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 413
+    assert response.is_json
+    assert "upload too large" in response.json["error"].lower()
+
+
 def test_asset_crop_profile_round_trip(client, sample_png_bytes):
     upload = client.post(
         "/api/assets",

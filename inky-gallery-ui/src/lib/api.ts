@@ -35,6 +35,9 @@ async function apiRequest<T>(input: string, init?: RequestInit): Promise<T> {
     : await response.text();
 
   if (!response.ok) {
+    if (response.status === 413) {
+      throw new ApiError('Upload too large. Max 20 MiB per file.', response.status);
+    }
     const message =
       typeof payload === 'string'
         ? payload
