@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -151,25 +150,22 @@ export default function CropEditorDialog({
       <DialogContent className="mx-auto flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-md flex-col rounded-2xl p-0 overflow-hidden">
         {asset && cropProfile && (
           <>
-            <div className="bg-card border-b border-border/50 px-4 py-3">
-              <DialogHeader className="space-y-1">
+            <div className="bg-card border-b border-border/50 px-4 py-2.5">
+              <DialogHeader className="space-y-0">
                 <DialogTitle className="flex items-center gap-2 text-base">
                   <Crop className="w-4 h-4 text-primary" />
                   Edit crop
                 </DialogTitle>
-                <DialogDescription className="text-sm">
-                  Drag the image to reposition it. Zoom in for a tighter crop before saving.
-                </DialogDescription>
               </DialogHeader>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 pt-3 space-y-3">
               <div
                 ref={viewportRef}
                 className="relative mx-auto overflow-hidden rounded-2xl bg-black shadow-inner touch-none select-none"
                 style={{
                   aspectRatio: `${aspectRatio}`,
-                  height: `min(52dvh, calc((100vw - 3rem) / ${aspectRatio}))`,
+                  height: `min(50dvh, calc((100vw - 3rem) / ${aspectRatio}))`,
                   width: 'auto',
                   maxWidth: '100%',
                 }}
@@ -206,8 +202,21 @@ export default function CropEditorDialog({
 
               <div className="rounded-2xl bg-muted/45 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <Label className="text-sm font-medium">Zoom</Label>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm font-medium">Zoom</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1.5"
+                        onClick={handleReset}
+                        disabled={Boolean(savingMode)}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Reset
+                      </Button>
+                    </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Saved crops apply whenever this image is rendered in cover mode.
                     </p>
@@ -227,29 +236,11 @@ export default function CropEditorDialog({
               </div>
             </div>
 
-            <div className="border-t border-border/50 p-4 space-y-3">
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full justify-start gap-2"
-                onClick={handleReset}
-                disabled={Boolean(savingMode)}
-              >
-                <RotateCcw className="w-4 h-4" />
-                Reset
-              </Button>
-              <div className="flex flex-col gap-2">
+            <div className="border-t border-border/50 p-4 pt-3">
+              <div className={`grid gap-2 ${onSaveAndApply ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 <Button
                   type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => onOpenChange(false)}
-                  disabled={Boolean(savingMode)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
+                  variant={onSaveAndApply ? 'secondary' : 'default'}
                   className="w-full"
                   onClick={() => void handleSave('save')}
                   disabled={Boolean(savingMode)}

@@ -94,8 +94,8 @@ class PlaybackController:
                 raise ValueError("No preview asset is active")
             preview_queue_item_id = state.get("preview_queue_item_id")
             render_target = self._resolve_render_target(
-                preview_asset_id=preview_asset_id,
-                preview_queue_item_id=preview_queue_item_id,
+                asset_id=preview_asset_id,
+                queue_item_id=preview_queue_item_id,
             )
             render_result = self.display_service.render_asset(
                 render_target["asset_id"],
@@ -121,6 +121,35 @@ class PlaybackController:
             )
             self.wake_event.set()
             return applied
+
+    def rerender_active(self):
+        with self.lock:
+            state = self.playback_repo.get_state()
+            active_asset_id = state.get("active_asset_id")
+            if not active_asset_id:
+                raise ValueError("No active asset is live on the device")
+
+            active_queue_item_id = state.get("active_queue_item_id")
+            render_target = self._resolve_render_target(
+                asset_id=active_asset_id,
+                queue_item_id=active_queue_item_id,
+            )
+            render_result = self.display_service.render_asset(
+                render_target["asset_id"],
+                fit_mode=render_target.get("fit_mode", "cover"),
+                background_mode=render_target.get("background_mode", "blur"),
+                background_color=render_target.get("background_color"),
+            )
+            updated_state = self.playback_repo.update_state(
+                {
+                    "mode": "preview" if state.get("preview_asset_id") else self._active_mode(state),
+                    "last_image_hash": render_result["image_hash"],
+                    "last_rendered_at": utcnow_iso(),
+                    "updated_at": utcnow_iso(),
+                }
+            )
+            self.wake_event.set()
+            return updated_state
 
     def apply_asset_now(self, asset_id: str, initial_settings: dict | None = None):
         if self.queue_service is None:
@@ -411,14 +440,14 @@ class PlaybackController:
                             }
                         )
 
-    def _resolve_render_target(self, preview_asset_id: str, preview_queue_item_id: str | None):
-        if preview_queue_item_id:
-            item = self.queue_repo.get_item(preview_queue_item_id)
+    def _resolve_render_target(self, asset_id: str, queue_item_id: str | None):
+        if queue_item_id:
+            item = self.queue_repo.get_item(queue_item_id)
             if not item:
-                raise ValueError(f"Queue item '{preview_queue_item_id}' does not exist")
+                raise ValueError(f"Queue item '{queue_item_id}' does not exist")
             item["queue_item_id"] = item["id"]
             return item
-        return {"asset_id": preview_asset_id}
+        return {"asset_id": asset_id}
 
     def _matches_active_target(self, state: dict, target: dict) -> bool:
         active_asset_id = state.get("active_asset_id")

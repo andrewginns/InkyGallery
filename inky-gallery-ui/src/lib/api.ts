@@ -209,6 +209,10 @@ export function applyPreview() {
   return apiRequest('/api/playback/apply', { method: 'POST' });
 }
 
+export function rerenderActivePlayback() {
+  return apiRequest('/api/playback/rerender-active', { method: 'POST' });
+}
+
 export function pausePlayback() {
   return apiRequest('/api/playback/pause', { method: 'POST' });
 }

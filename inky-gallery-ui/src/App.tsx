@@ -26,6 +26,7 @@ import {
   listAssets,
   pausePlayback,
   previewPlayback,
+  rerenderActivePlayback,
   reorderQueue,
   resumePlayback,
   sortQueue,
@@ -315,7 +316,22 @@ export default function App() {
 
   const handleSaveAssetCropAndApply = async (asset: Asset, cropProfile: Asset['crop_profile']) => {
     await handleSaveAssetCrop(asset, cropProfile);
-    await handleApply();
+    if (playbackState.preview_asset_id) {
+      await handleApply();
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsRenderingToDevice(true);
+    try {
+      await rerenderActivePlayback();
+      await refreshPlaybackAndDisplay();
+    } catch (error) {
+      setErrorMessage(extractErrorMessage(error));
+      throw error;
+    } finally {
+      setIsRenderingToDevice(false);
+    }
   };
 
   const handleDeleteAssets = (assetIds: string[]) =>

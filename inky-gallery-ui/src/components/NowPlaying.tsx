@@ -656,14 +656,10 @@ export default function NowPlaying({
         onSave={async (asset, cropProfile) => {
           await onSaveCrop(asset, cropProfile);
         }}
-        onSaveAndApply={
-          isPreview
-            ? async (asset, cropProfile) => {
-                await onSaveCropAndApply(asset, cropProfile);
-                setShowDetail(false);
-              }
-            : undefined
-        }
+        onSaveAndApply={async (asset, cropProfile) => {
+          await onSaveCropAndApply(asset, cropProfile);
+          setShowDetail(false);
+        }}
       />
     </div>
   );

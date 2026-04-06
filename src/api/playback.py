@@ -39,6 +39,16 @@ def create_playback_blueprint(playback_controller):
             return jsonify({"error": str(exc)}), 503
         return jsonify(state)
 
+    @blueprint.post("/api/playback/rerender-active")
+    def rerender_active():
+        try:
+            state = playback_controller.rerender_active()
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
+        return jsonify(state)
+
     @blueprint.post("/api/playback/next")
     def next_item():
         try:

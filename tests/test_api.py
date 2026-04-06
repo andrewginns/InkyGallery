@@ -237,6 +237,40 @@ def test_queue_and_playback_flow(client, sample_png_bytes):
     assert display_status.json["mode"] == "displaying"
 
 
+def test_rerender_active_reapplies_saved_crop_to_live_image(client):
+    split_image = make_split_png_bytes((255, 0, 0), (0, 0, 255))
+    upload = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(split_image), "live-crop.png")},
+        content_type="multipart/form-data",
+    )
+    asset_id = upload.json["created"][0]["id"]
+
+    queue_add = client.post("/api/queue/items", json={"asset_ids": [asset_id]})
+    queue_item_id = queue_add.json["items"][0]["id"]
+
+    preview = client.post("/api/playback/preview", json={"queue_item_id": queue_item_id})
+    assert preview.status_code == 200
+
+    applied = client.post("/api/playback/apply")
+    assert applied.status_code == 200, applied.json
+    original_hash = applied.json["last_image_hash"]
+
+    crop_put = client.put(
+        f"/api/assets/{asset_id}/crop",
+        json={"x": 0.7, "y": 0.0, "width": 0.3, "height": 1.0},
+    )
+    assert crop_put.status_code == 200, crop_put.json
+
+    rerendered = client.post("/api/playback/rerender-active")
+    assert rerendered.status_code == 200, rerendered.json
+    assert rerendered.json["active_asset_id"] == asset_id
+    assert rerendered.json["active_queue_item_id"] == queue_item_id
+    assert rerendered.json["preview_asset_id"] is None
+    assert rerendered.json["preview_queue_item_id"] is None
+    assert rerendered.json["last_image_hash"] != original_hash
+
+
 def test_apply_now_injects_after_live_item_and_continues_queue(client, sample_png_bytes):
     first = client.post(
         "/api/assets",
