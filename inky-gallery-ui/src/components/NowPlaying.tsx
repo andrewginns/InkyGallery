@@ -79,6 +79,8 @@ export default function NowPlaying({
   const [showDetail, setShowDetail] = useState(false);
   const [showCropEditor, setShowCropEditor] = useState(false);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
+  const filmStripRef = useRef<HTMLDivElement | null>(null);
+  const queueItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [timeRemaining, setTimeRemaining] = useState(
     playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
   );
@@ -153,6 +155,31 @@ export default function NowPlaying({
     }
     setImageLoaded(loadedImageUrlsRef.current.has(displayedUrl));
   }, [displayedUrl]);
+
+  useEffect(() => {
+    if (!liveQueueItem) {
+      return;
+    }
+
+    const filmStrip = filmStripRef.current;
+    const liveItem = queueItemRefs.current[liveQueueItem.id];
+    if (!filmStrip || !liveItem) {
+      return;
+    }
+
+    const centerLiveItem = () => {
+      const targetScrollLeft =
+        liveItem.offsetLeft - filmStrip.clientWidth / 2 + liveItem.clientWidth / 2;
+      const maxScrollLeft = Math.max(0, filmStrip.scrollWidth - filmStrip.clientWidth);
+      filmStrip.scrollTo({
+        left: Math.min(Math.max(0, targetScrollLeft), maxScrollLeft),
+        behavior: 'smooth',
+      });
+    };
+
+    const frame = window.requestAnimationFrame(centerLiveItem);
+    return () => window.cancelAnimationFrame(frame);
+  }, [liveQueueItem?.id, queue.length]);
 
   const modeLabel: Record<PlaybackState['mode'], string> = {
     idle: 'Idle',
@@ -398,7 +425,10 @@ export default function NowPlaying({
                 </Badge>
               )}
             </div>
-            <div className="-mx-4 px-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              ref={filmStripRef}
+              className="-mx-4 px-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               <div className="flex min-w-max gap-3">
                 {queue.map((item) => {
                   const isLive = item.id === liveQueueItem?.id;
@@ -410,6 +440,9 @@ export default function NowPlaying({
                       onClick={() => onPreviewQueueItem(item.id)}
                       className="flex w-16 flex-col gap-1.5 text-left"
                       disabled={!item.enabled}
+                      ref={(node) => {
+                        queueItemRefs.current[item.id] = node;
+                      }}
                     >
                       <div
                         className={`relative h-20 w-16 overflow-hidden rounded-xl border transition-all ${
