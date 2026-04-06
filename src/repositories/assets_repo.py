@@ -52,6 +52,48 @@ class AssetsRepository:
                 ),
             )
 
+    def get_crop_profile(self, asset_id: str):
+        with self.database.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT asset_id, crop_x, crop_y, crop_width, crop_height, updated_at
+                FROM asset_crop_profiles
+                WHERE asset_id = ?
+                """,
+                (asset_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def upsert_crop_profile(self, crop_profile: dict[str, Any]):
+        with self.database.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO asset_crop_profiles (
+                    asset_id, crop_x, crop_y, crop_width, crop_height, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(asset_id) DO UPDATE SET
+                    crop_x = excluded.crop_x,
+                    crop_y = excluded.crop_y,
+                    crop_width = excluded.crop_width,
+                    crop_height = excluded.crop_height,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    crop_profile["asset_id"],
+                    crop_profile["crop_x"],
+                    crop_profile["crop_y"],
+                    crop_profile["crop_width"],
+                    crop_profile["crop_height"],
+                    crop_profile["updated_at"],
+                ),
+            )
+        return self.get_crop_profile(crop_profile["asset_id"])
+
+    def delete_crop_profile(self, asset_id: str):
+        with self.database.connection() as conn:
+            cursor = conn.execute("DELETE FROM asset_crop_profiles WHERE asset_id = ?", (asset_id,))
+        return cursor.rowcount > 0
+
     def get_asset(self, asset_id: str):
         with self.database.connection() as conn:
             row = conn.execute(
@@ -133,4 +175,3 @@ class AssetsRepository:
     def delete_asset(self, asset_id: str):
         with self.database.connection() as conn:
             conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
-

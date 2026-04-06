@@ -28,7 +28,8 @@ class DisplayService:
         if image is None:
             raise RuntimeError(f"Failed to load asset '{asset_id}'")
 
-        image = self._apply_render_mode(image, dimensions, fit_mode, background_mode, background_color)
+        crop_profile = self.assets_repo.get_crop_profile(asset_id)
+        image = self._apply_render_mode(image, dimensions, fit_mode, background_mode, background_color, crop_profile)
         final_image = self.display_manager.display_image(image)
         return {
             "asset_id": asset_id,
@@ -36,8 +37,10 @@ class DisplayService:
             "current_image_path": str(self.media_store.current_image_path),
         }
 
-    def _apply_render_mode(self, image, dimensions, fit_mode, background_mode, background_color):
+    def _apply_render_mode(self, image, dimensions, fit_mode, background_mode, background_color, crop_profile=None):
         if fit_mode == "cover":
+            if crop_profile:
+                image = self._apply_saved_crop(image, crop_profile)
             return ImageOps.fit(image, dimensions, method=Image.Resampling.LANCZOS)
         if fit_mode != "contain":
             raise ValueError("fit_mode must be one of: cover, contain")
@@ -51,3 +54,10 @@ class DisplayService:
             return ImageOps.pad(image, dimensions, color=(255, 255, 255), method=Image.Resampling.LANCZOS)
         raise ValueError("background_mode must be one of: blur, solid, none")
 
+    def _apply_saved_crop(self, image: Image.Image, crop_profile: dict):
+        width, height = image.size
+        left = max(0, min(width - 1, round(float(crop_profile["crop_x"]) * width)))
+        top = max(0, min(height - 1, round(float(crop_profile["crop_y"]) * height)))
+        right = max(left + 1, min(width, round((float(crop_profile["crop_x"]) + float(crop_profile["crop_width"])) * width)))
+        bottom = max(top + 1, min(height, round((float(crop_profile["crop_y"]) + float(crop_profile["crop_height"])) * height)))
+        return image.crop((left, top, right, bottom))

@@ -13,6 +13,18 @@ def make_png_bytes(color):
     return buffer.getvalue()
 
 
+def make_split_png_bytes(left_color, right_color, size=(200, 100)):
+    image = Image.new("RGB", size, color=left_color)
+    split_x = size[0] // 2
+    for x in range(split_x, size[0]):
+        for y in range(size[1]):
+            image.putpixel((x, y), right_color)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def test_health_and_defaults(client):
     health = client.get("/health")
     assert health.status_code == 200
@@ -85,6 +97,92 @@ def test_asset_list_paginates_with_next_cursor(client):
     assert second_page.status_code == 200
     assert len(second_page.json["items"]) == 1
     assert second_page.json["next_cursor"] is None
+
+
+def test_asset_crop_profile_round_trip(client, sample_png_bytes):
+    upload = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(sample_png_bytes), "crop.png")},
+        content_type="multipart/form-data",
+    )
+    asset_id = upload.json["created"][0]["id"]
+
+    crop_put = client.put(
+        f"/api/assets/{asset_id}/crop",
+        json={"x": 0.275, "y": 0.0, "width": 0.45, "height": 1.0},
+    )
+    assert crop_put.status_code == 200, crop_put.json
+    assert crop_put.json["crop_profile"]["x"] == 0.275
+
+    crop_get = client.get(f"/api/assets/{asset_id}/crop")
+    assert crop_get.status_code == 200
+    assert crop_get.json["crop_profile"]["width"] == 0.45
+
+    asset = client.get(f"/api/assets/{asset_id}")
+    assert asset.status_code == 200
+    assert asset.json["crop_profile"]["height"] == 1.0
+
+    crop_delete = client.delete(f"/api/assets/{asset_id}/crop")
+    assert crop_delete.status_code == 200
+    assert crop_delete.json["success"] is True
+
+    crop_get_after_delete = client.get(f"/api/assets/{asset_id}/crop")
+    assert crop_get_after_delete.status_code == 200
+    assert crop_get_after_delete.json["crop_profile"] is None
+
+
+def test_asset_crop_profile_validation_rejects_wrong_aspect(client, sample_png_bytes):
+    upload = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(sample_png_bytes), "crop.png")},
+        content_type="multipart/form-data",
+    )
+    asset_id = upload.json["created"][0]["id"]
+
+    invalid_crop = client.put(
+        f"/api/assets/{asset_id}/crop",
+        json={"x": 0.1, "y": 0.1, "width": 0.7, "height": 0.7},
+    )
+    assert invalid_crop.status_code == 400
+    assert "aspect ratio" in invalid_crop.json["error"].lower()
+
+
+def test_device_settings_orientation_is_fixed_vertical(client):
+    response = client.patch("/api/device/settings", json={"orientation": "horizontal"})
+    assert response.status_code == 400
+    assert "unsupported device setting fields" in response.json["error"].lower()
+
+
+def test_render_uses_saved_crop_profile(client, app):
+    client.patch("/api/device/settings", json={"orientation": "vertical"})
+    split_image = make_split_png_bytes((255, 0, 0), (0, 0, 255))
+    upload = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(split_image), "split.png")},
+        content_type="multipart/form-data",
+    )
+    asset_id = upload.json["created"][0]["id"]
+
+    crop_put = client.put(
+        f"/api/assets/{asset_id}/crop",
+        json={"x": 0.7, "y": 0.0, "width": 0.3, "height": 1.0},
+    )
+    assert crop_put.status_code == 200, crop_put.json
+
+    rendered = {}
+
+    def capture_display(image):
+        rendered["image"] = image.copy()
+        return image
+
+    app.extensions["display_service"].display_manager.display_image = capture_display
+    result = app.extensions["display_service"].render_asset(asset_id)
+    assert result["image_hash"]
+
+    sampled = rendered["image"].resize((1, 1))
+    dominant = sampled.getpixel((0, 0))
+    assert dominant[2] > 200
+    assert dominant[0] < 80
 
 
 def test_queue_and_playback_flow(client, sample_png_bytes):
@@ -192,7 +290,6 @@ def test_device_settings_patch(client):
     response = client.patch(
         "/api/device/settings",
         json={
-            "orientation": "vertical",
             "image_settings": {
                 "brightness": 1.2,
                 "contrast": 1.1,

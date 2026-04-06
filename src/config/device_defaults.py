@@ -1,7 +1,7 @@
 DEFAULT_DEVICE_SETTINGS = {
     "name": "InkyGallery",
     "resolution": [800, 480],
-    "orientation": "horizontal",
+    "orientation": "vertical",
     "inverted_image": False,
     "timezone": "UTC",
     "time_format": "24h",
@@ -14,4 +14,3 @@ DEFAULT_DEVICE_SETTINGS = {
         "inky_saturation": 0.5,
     },
 }
-

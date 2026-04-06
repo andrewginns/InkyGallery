@@ -1,4 +1,4 @@
-import { type ChangeEvent, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -38,13 +38,21 @@ import {
   Filter,
   ArrowUpDown,
   Clock,
+  Crop,
   FileText,
   Send,
 } from 'lucide-react';
-import type { Asset } from '@/data/types';
+import type { Asset, DeviceSettings } from '@/data/types';
+import CropEditorDialog from '@/components/CropEditorDialog';
+import {
+  cropProfileToImageStyle,
+  getEffectiveCropProfile,
+  getPreviewAspectRatio,
+} from '@/lib/crop';
 
 interface LibraryProps {
   assets: Asset[];
+  deviceSettings: DeviceSettings;
   onApplyNow: (assetId: string) => void;
   onAddToQueue: (assetIds: string[]) => void;
   onUpload: (
@@ -53,6 +61,7 @@ interface LibraryProps {
   ) => void;
   onToggleFavorite: (asset: Asset) => void;
   onSaveCaption: (asset: Asset, caption: string | null) => void;
+  onSaveCrop: (asset: Asset, cropProfile: Asset['crop_profile']) => Promise<void>;
   onDelete: (assetIds: string[]) => void;
   busy?: boolean;
 }
@@ -70,11 +79,13 @@ function formatDate(iso: string): string {
 
 export default function Library({
   assets,
+  deviceSettings,
   onApplyNow,
   onAddToQueue,
   onUpload,
   onToggleFavorite,
   onSaveCaption,
+  onSaveCrop,
   onDelete,
   busy = false,
 }: LibraryProps) {
@@ -84,11 +95,26 @@ export default function Library({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
+  const [showCropEditor, setShowCropEditor] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState<'reject' | 'reuse_existing' | 'keep_both'>('reuse_existing');
   const [autoAddToQueue, setAutoAddToQueue] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!detailAsset) {
+      return;
+    }
+    const latestAsset = assets.find((asset) => asset.id === detailAsset.id) || null;
+    if (!latestAsset) {
+      setDetailAsset(null);
+      return;
+    }
+    if (latestAsset !== detailAsset) {
+      setDetailAsset(latestAsset);
+    }
+  }, [assets, detailAsset]);
 
   const filteredAssets = assets
     .filter((a) => {
@@ -165,6 +191,9 @@ export default function Library({
       fileInputRef.current.value = '';
     }
   };
+
+  const detailPreviewAspectRatio = detailAsset ? getPreviewAspectRatio(deviceSettings) : 1;
+  const detailPreviewCrop = detailAsset ? getEffectiveCropProfile(detailAsset, deviceSettings) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -411,20 +440,29 @@ export default function Library({
             <>
               {/* Image preview */}
               <div className="relative w-full bg-black">
-                <div style={{ paddingBottom: '75%' }} className="relative">
+                <div style={{ aspectRatio: `${detailPreviewAspectRatio}` }} className="relative overflow-hidden">
                   <img
                     src={detailAsset.original_url}
                     alt={detailAsset.filename_original}
-                    className="absolute inset-0 w-full h-full object-contain"
+                    className="absolute max-w-none select-none"
+                    style={detailPreviewCrop ? cropProfileToImageStyle(detailPreviewCrop) : undefined}
+                    draggable={false}
                   />
                 </div>
               </div>
 
               <div className="p-4 space-y-4">
                 <DialogHeader className="space-y-1">
-                  <DialogTitle className="text-base">
-                    {detailAsset.filename_original}
-                  </DialogTitle>
+                  <div className="flex items-start justify-between gap-3">
+                    <DialogTitle className="text-base">
+                      {detailAsset.filename_original}
+                    </DialogTitle>
+                    {detailAsset.crop_profile && (
+                      <Badge variant="secondary" className="shrink-0 text-[10px] px-2 py-0 h-6">
+                        Saved crop
+                      </Badge>
+                    )}
+                  </div>
                   {detailAsset.caption && (
                     <p className="text-sm text-muted-foreground">{detailAsset.caption}</p>
                   )}
@@ -465,6 +503,18 @@ export default function Library({
                     <Send className="w-3.5 h-3.5" />
                     Apply Now
                   </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
+                    onClick={() => setShowCropEditor(true)}
+                    disabled={busy}
+                  >
+                    <Crop className="w-3.5 h-3.5" />
+                    Edit Crop
+                  </Button>
+                </div>
+                <div className="flex gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
@@ -530,6 +580,25 @@ export default function Library({
           )}
         </DialogContent>
       </Dialog>
+
+      <CropEditorDialog
+        asset={detailAsset}
+        deviceSettings={deviceSettings}
+        open={showCropEditor}
+        onOpenChange={setShowCropEditor}
+        onSave={async (asset, cropProfile) => {
+          await onSaveCrop(asset, cropProfile);
+        }}
+        onSaveAndApply={
+          detailAsset
+            ? async (asset, cropProfile) => {
+                await onSaveCrop(asset, cropProfile);
+                onApplyNow(asset.id);
+                setDetailAsset(null);
+              }
+            : undefined
+        }
+      />
 
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>

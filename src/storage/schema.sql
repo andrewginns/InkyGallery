@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS asset_variants (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_variants_asset_kind
 ON asset_variants(asset_id, kind);
 
+CREATE TABLE IF NOT EXISTS asset_crop_profiles (
+    asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+    crop_x REAL NOT NULL,
+    crop_y REAL NOT NULL,
+    crop_width REAL NOT NULL,
+    crop_height REAL NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS queue_items (
     id TEXT PRIMARY KEY,
     asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,

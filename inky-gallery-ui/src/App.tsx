@@ -17,6 +17,7 @@ import {
   ApiError,
   applyPreview,
   bulkDeleteAssets,
+  deleteAssetCrop,
   deleteQueueItem,
   fetchBootstrap,
   getQueue,
@@ -29,6 +30,7 @@ import {
   resumePlayback,
   sortQueue,
   updateAsset,
+  updateAssetCrop,
   updateDeviceSettings,
   updatePlaybackSettings,
   updateQueueItem,
@@ -44,6 +46,7 @@ import type {
   QueueItem,
   QueueSortMode,
 } from '@/data/types';
+import { areCropProfilesEquivalent, getDefaultCropProfile } from '@/lib/crop';
 
 type TabId = 'now-playing' | 'library' | 'queue' | 'settings';
 
@@ -78,7 +81,7 @@ const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
 const DEFAULT_DEVICE_SETTINGS: DeviceSettings = {
   name: 'InkyGallery',
   resolution: [800, 480],
-  orientation: 'horizontal',
+  orientation: 'vertical',
   inverted_image: false,
   timezone: 'UTC',
   time_format: '24h',
@@ -167,6 +170,10 @@ export default function App() {
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [isRenderingToDevice, setIsRenderingToDevice] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const replaceAssetInState = (updatedAsset: Asset) => {
+    setAssets((current) => current.map((item) => (item.id === updatedAsset.id ? updatedAsset : item)));
+  };
 
   const setPlaybackPayload = (payload: PlaybackPayload, nextDisplayStatus: DisplayStatus | null) => {
     setPlaybackSettings(payload.settings);
@@ -282,8 +289,34 @@ export default function App() {
   const handleSaveCaption = (asset: Asset, caption: string | null) =>
     withAction('Saving caption…', async () => {
       const updated = await updateAsset(asset.id, { caption });
-      setAssets((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      replaceAssetInState(updated);
     });
+
+  const persistAssetCrop = async (asset: Asset, cropProfile: Asset['crop_profile']) => {
+    if (!cropProfile) {
+      return;
+    }
+    const defaultCrop = getDefaultCropProfile(asset, deviceSettings);
+    const response = areCropProfilesEquivalent(cropProfile, defaultCrop)
+      ? await deleteAssetCrop(asset.id)
+      : await updateAssetCrop(asset.id, cropProfile);
+    replaceAssetInState(response.asset);
+  };
+
+  const handleSaveAssetCrop = async (asset: Asset, cropProfile: Asset['crop_profile']) => {
+    setErrorMessage(null);
+    try {
+      await persistAssetCrop(asset, cropProfile);
+    } catch (error) {
+      setErrorMessage(extractErrorMessage(error));
+      throw error;
+    }
+  };
+
+  const handleSaveAssetCropAndApply = async (asset: Asset, cropProfile: Asset['crop_profile']) => {
+    await handleSaveAssetCrop(asset, cropProfile);
+    await handleApply();
+  };
 
   const handleDeleteAssets = (assetIds: string[]) =>
     withAction('Deleting images…', async () => {
@@ -443,23 +476,28 @@ export default function App() {
               <NowPlaying
                 playbackState={playbackState}
                 playbackSettings={playbackSettings}
+                deviceSettings={deviceSettings}
                 queue={queue}
                 assets={assets}
                 onPause={handlePause}
                 onResume={handleResume}
                 onApply={handleApply}
                 onPreviewQueueItem={handlePreviewQueueItem}
+                onSaveCrop={handleSaveAssetCrop}
+                onSaveCropAndApply={handleSaveAssetCropAndApply}
                 isRendering={isRenderingToDevice}
               />
             )}
             {activeTab === 'library' && (
               <Library
                 assets={assets}
+                deviceSettings={deviceSettings}
                 onApplyNow={handleApplyAssetNow}
                 onAddToQueue={handleAddToQueue}
                 onUpload={handleUpload}
                 onToggleFavorite={handleToggleFavorite}
                 onSaveCaption={handleSaveCaption}
+                onSaveCrop={handleSaveAssetCrop}
                 onDelete={handleDeleteAssets}
                 busy={Boolean(busyMessage)}
               />

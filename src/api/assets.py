@@ -50,6 +50,31 @@ def create_assets_blueprint(asset_service, playback_controller):
             return jsonify({"error": "Asset not found"}), 404
         return jsonify(asset)
 
+    @blueprint.get("/api/assets/<asset_id>/crop")
+    def get_asset_crop(asset_id: str):
+        crop_profile = asset_service.get_crop_profile(asset_id)
+        if crop_profile is None and not asset_service.serialize_asset(asset_id):
+            return jsonify({"error": "Asset not found"}), 404
+        return jsonify({"crop_profile": crop_profile})
+
+    @blueprint.put("/api/assets/<asset_id>/crop")
+    def put_asset_crop(asset_id: str):
+        data = request.get_json(force=True, silent=True) or {}
+        try:
+            crop_profile = asset_service.update_crop_profile(asset_id, data)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        if crop_profile is None:
+            return jsonify({"error": "Asset not found"}), 404
+        return jsonify({"crop_profile": crop_profile, "asset": asset_service.serialize_asset(asset_id)})
+
+    @blueprint.delete("/api/assets/<asset_id>/crop")
+    def delete_asset_crop(asset_id: str):
+        deleted = asset_service.delete_crop_profile(asset_id)
+        if deleted is None:
+            return jsonify({"error": "Asset not found"}), 404
+        return jsonify({"success": True, "deleted": bool(deleted), "asset": asset_service.serialize_asset(asset_id)})
+
     @blueprint.delete("/api/assets/<asset_id>")
     def delete_asset(asset_id: str):
         if not asset_service.serialize_asset(asset_id):

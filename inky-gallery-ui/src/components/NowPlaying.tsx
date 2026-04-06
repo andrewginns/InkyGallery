@@ -8,12 +8,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { Clock, Eye, FileText, Pause, Play, Repeat, Send, Shuffle } from 'lucide-react';
-import type { Asset, PlaybackSettings, PlaybackState, QueueItem } from '@/data/types';
+import { Clock, Crop, Eye, FileText, Pause, Play, Repeat, Send, Shuffle } from 'lucide-react';
+import type { Asset, DeviceSettings, PlaybackSettings, PlaybackState, QueueItem } from '@/data/types';
+import CropEditorDialog from '@/components/CropEditorDialog';
+import {
+  cropProfileToImageStyle,
+  getEffectiveCropProfile,
+  getPreviewAspectRatio,
+} from '@/lib/crop';
 
 interface NowPlayingProps {
   playbackState: PlaybackState;
   playbackSettings: PlaybackSettings;
+  deviceSettings: DeviceSettings;
   queue: QueueItem[];
   assets: Asset[];
   isRendering?: boolean;
@@ -21,6 +28,8 @@ interface NowPlayingProps {
   onResume: () => void;
   onApply: () => void;
   onPreviewQueueItem: (queueItemId: string) => void;
+  onSaveCrop: (asset: Asset, cropProfile: Asset['crop_profile']) => Promise<void>;
+  onSaveCropAndApply: (asset: Asset, cropProfile: Asset['crop_profile']) => Promise<void>;
 }
 
 function formatTimeAgo(iso: string | null): string {
@@ -55,6 +64,7 @@ function formatDate(iso: string | undefined): string {
 export default function NowPlaying({
   playbackState,
   playbackSettings,
+  deviceSettings,
   queue,
   assets,
   isRendering = false,
@@ -62,9 +72,12 @@ export default function NowPlaying({
   onResume,
   onApply,
   onPreviewQueueItem,
+  onSaveCrop,
+  onSaveCropAndApply,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const [showCropEditor, setShowCropEditor] = useState(false);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
   const [timeRemaining, setTimeRemaining] = useState(
     playbackState.time_remaining_seconds ?? playbackSettings.default_timeout_seconds
@@ -83,6 +96,12 @@ export default function NowPlaying({
     playbackState.last_rendered_url;
   const liveQueueItem = activeQueueItem;
   const selectedQueueItem = previewQueueItem || liveQueueItem;
+  const selectedFitMode = selectedQueueItem?.fit_mode ?? 'cover';
+  const previewAspectRatio = getPreviewAspectRatio(deviceSettings);
+  const displayedCrop =
+    displayedAsset && selectedFitMode === 'cover'
+      ? getEffectiveCropProfile(displayedAsset, deviceSettings)
+      : null;
 
   const hasDisplayableImage = Boolean(playbackState.active_asset_id || playbackState.preview_asset_id);
   const effectiveMode: PlaybackState['mode'] = isRendering
@@ -159,7 +178,7 @@ export default function NowPlaying({
       <div className="relative mx-4 mt-3 mb-2 rounded-xl overflow-hidden bg-black/90 shadow-lg shadow-black/20">
         <div
           className={`relative w-full ${isIdle ? '' : 'cursor-zoom-in'}`}
-          style={{ paddingBottom: '60%' }}
+          style={{ aspectRatio: `${previewAspectRatio}` }}
           onClick={() => {
             if (!isIdle) {
               setShowDetail(true);
@@ -182,11 +201,12 @@ export default function NowPlaying({
               <img
                 src={displayedUrl || ''}
                 alt={displayedAsset?.filename_original || 'Display'}
-                className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${
+                className={`absolute transition-opacity duration-500 ${
                   isRendering ? 'animate-rendering-image' : ''
-                } ${
+                } ${displayedCrop ? 'max-w-none select-none' : 'inset-0 w-full h-full object-contain'} ${
                   imageLoaded ? 'opacity-100' : 'opacity-0'
                 }`}
+                style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
                 onLoad={(event) => {
                   if (event.currentTarget.currentSrc) {
                     loadedImageUrlsRef.current.add(event.currentTarget.currentSrc);
@@ -233,17 +253,33 @@ export default function NowPlaying({
                     Preview — not yet live
                   </span>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onApply();
-                  }}
-                  className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs h-7 px-3"
-                >
-                  <Send className="w-3 h-3 mr-1" />
-                  Apply
-                </Button>
+                <div className="flex items-center gap-2">
+                  {selectedFitMode === 'cover' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setShowCropEditor(true);
+                      }}
+                      className="text-xs h-7 px-3"
+                    >
+                      <Crop className="w-3 h-3 mr-1" />
+                      Edit crop
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onApply();
+                    }}
+                    className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs h-7 px-3"
+                  >
+                    <Send className="w-3 h-3 mr-1" />
+                    Apply
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -269,6 +305,26 @@ export default function NowPlaying({
             </div>
           )}
         </div>
+
+        {!isIdle && displayedAsset && selectedFitMode === 'cover' && (
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8 text-xs gap-1.5 rounded-lg"
+              onClick={() => setShowCropEditor(true)}
+            >
+              <Crop className="w-3.5 h-3.5" />
+              Edit crop
+            </Button>
+            {displayedAsset.crop_profile && (
+              <Badge variant="secondary" className="text-[10px] px-2 py-0 h-6">
+                Saved crop
+              </Badge>
+            )}
+          </div>
+        )}
 
         {!isIdle && (
           <div className="flex items-center gap-3 mb-4">
@@ -463,11 +519,13 @@ export default function NowPlaying({
           {displayedAsset && (
             <>
               <div className="relative w-full bg-black">
-                <div style={{ paddingBottom: '75%' }} className="relative">
+                <div style={{ aspectRatio: `${previewAspectRatio}` }} className="relative overflow-hidden">
                   <img
                     src={displayedAsset.original_url || displayedUrl || ''}
                     alt={displayedAsset.filename_original}
-                    className="absolute inset-0 w-full h-full object-contain"
+                    className={displayedCrop ? 'absolute max-w-none select-none' : 'absolute inset-0 w-full h-full object-contain'}
+                    style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
+                    draggable={false}
                   />
                 </div>
               </div>
@@ -530,33 +588,29 @@ export default function NowPlaying({
                 </div>
 
                 <div className="flex gap-2">
+                  {selectedFitMode === 'cover' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
+                      onClick={() => setShowCropEditor(true)}
+                    >
+                      <Crop className="w-3.5 h-3.5" />
+                      Edit Crop
+                    </Button>
+                  )}
                   {isPreview ? (
-                    <>
-                      <Button
-                        size="sm"
-                        className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
-                        onClick={() => {
-                          onApply();
-                          setShowDetail(false);
-                        }}
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        Apply
-                      </Button>
-                      {liveQueueItem && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="flex-1 h-9 text-xs rounded-lg"
-                          onClick={() => {
-                            onPreviewQueueItem(liveQueueItem.id);
-                            setShowDetail(false);
-                          }}
-                        >
-                          Back to Live
-                        </Button>
-                      )}
-                    </>
+                    <Button
+                      size="sm"
+                      className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
+                      onClick={() => {
+                        onApply();
+                        setShowDetail(false);
+                      }}
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Apply
+                    </Button>
                   ) : (
                     <Button
                       variant="secondary"
@@ -568,11 +622,42 @@ export default function NowPlaying({
                     </Button>
                   )}
                 </div>
+                {isPreview && liveQueueItem && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full h-9 text-xs rounded-lg"
+                    onClick={() => {
+                      onPreviewQueueItem(liveQueueItem.id);
+                      setShowDetail(false);
+                    }}
+                  >
+                    Back to Live
+                  </Button>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      <CropEditorDialog
+        asset={displayedAsset}
+        deviceSettings={deviceSettings}
+        open={showCropEditor}
+        onOpenChange={setShowCropEditor}
+        onSave={async (asset, cropProfile) => {
+          await onSaveCrop(asset, cropProfile);
+        }}
+        onSaveAndApply={
+          isPreview
+            ? async (asset, cropProfile) => {
+                await onSaveCropAndApply(asset, cropProfile);
+                setShowDetail(false);
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

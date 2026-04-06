@@ -18,7 +18,6 @@ def _merge_defaults(current: dict, defaults: dict) -> dict:
 class DeviceSettingsService:
     MUTABLE_KEYS = {
         "name",
-        "orientation",
         "inverted_image",
         "timezone",
         "time_format",
@@ -38,6 +37,7 @@ class DeviceSettingsService:
         else:
             current = self.load_settings()
             merged = _merge_defaults(current, DEFAULT_DEVICE_SETTINGS)
+            merged["orientation"] = "vertical"
             if merged != current:
                 self.save_settings(merged)
 
@@ -85,6 +85,7 @@ class DeviceSettingsService:
                 unknown = ", ".join(sorted(unknown_image_keys))
                 raise ValueError(f"Unsupported image_settings fields: {unknown}")
             settings["image_settings"] = _merge_defaults(image_updates, settings.get("image_settings", {}))
+        settings["orientation"] = "vertical"
         self.validate_settings(settings)
         self.save_settings(settings)
         return settings
@@ -99,8 +100,8 @@ class DeviceSettingsService:
     def validate_settings(self, settings: dict):
         if not isinstance(settings.get("name"), str) or not settings["name"].strip():
             raise ValueError("name must be a non-empty string")
-        if settings.get("orientation") not in {"horizontal", "vertical"}:
-            raise ValueError("orientation must be one of: horizontal, vertical")
+        if settings.get("orientation") != "vertical":
+            raise ValueError("orientation is fixed to vertical in this build")
         if settings.get("time_format") not in {"12h", "24h"}:
             raise ValueError("time_format must be one of: 12h, 24h")
         if not isinstance(settings.get("inverted_image"), bool):

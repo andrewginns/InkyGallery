@@ -1,5 +1,6 @@
 import hashlib
 import io
+import math
 import mimetypes
 import os
 import uuid
@@ -16,10 +17,11 @@ class AssetService:
     MAX_UPLOAD_BYTES = 20 * 1024 * 1024
     MAX_IMAGE_PIXELS = 32_000_000
 
-    def __init__(self, assets_repo, queue_repo, media_store):
+    def __init__(self, assets_repo, queue_repo, media_store, device_settings_service):
         self.assets_repo = assets_repo
         self.queue_repo = queue_repo
         self.media_store = media_store
+        self.device_settings_service = device_settings_service
 
     def ingest_uploads(self, files, duplicate_policy="reject", auto_add_to_queue=False):
         created = []
@@ -152,6 +154,7 @@ class AssetService:
             return None
         variants = self.assets_repo.list_variants(asset_id)
         thumbnails = {variant["kind"]: variant for variant in variants}
+        crop_profile = self.assets_repo.get_crop_profile(asset_id)
         return {
             "id": asset["id"],
             "filename_original": asset["filename_original"],
@@ -172,6 +175,7 @@ class AssetService:
                 "md": f"/api/assets/{asset_id}/thumbnail?size=md" if "thumbnail_md" in thumbnails else None,
             },
             "file_url": f"/api/assets/{asset_id}/file",
+            "crop_profile": self._serialize_crop_profile(crop_profile),
         }
 
     def update_asset(self, asset_id: str, updates: dict):
@@ -207,6 +211,39 @@ class AssetService:
             return None
         return Path(variant["path"])
 
+    def get_crop_profile(self, asset_id: str):
+        if not self.assets_repo.get_asset(asset_id):
+            return None
+        return self._serialize_crop_profile(self.assets_repo.get_crop_profile(asset_id))
+
+    def update_crop_profile(self, asset_id: str, crop_profile: dict):
+        asset = self.assets_repo.get_asset(asset_id)
+        if not asset:
+            return None
+
+        normalized = self._normalize_crop_profile(asset, crop_profile)
+        saved = self.assets_repo.upsert_crop_profile(
+            {
+                "asset_id": asset_id,
+                "crop_x": normalized["x"],
+                "crop_y": normalized["y"],
+                "crop_width": normalized["width"],
+                "crop_height": normalized["height"],
+                "updated_at": utcnow_iso(),
+            }
+        )
+        self.assets_repo.update_asset(asset_id, {"updated_at": utcnow_iso()})
+        return self._serialize_crop_profile(saved)
+
+    def delete_crop_profile(self, asset_id: str):
+        asset = self.assets_repo.get_asset(asset_id)
+        if not asset:
+            return None
+        deleted = self.assets_repo.delete_crop_profile(asset_id)
+        if deleted:
+            self.assets_repo.update_asset(asset_id, {"updated_at": utcnow_iso()})
+        return deleted
+
     def _read_limited_upload(self, file) -> bytes:
         max_bytes = self.MAX_UPLOAD_BYTES
         chunks = []
@@ -240,3 +277,58 @@ class AssetService:
             raise
         except (UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
             raise ValueError(f"Uploaded file '{filename}' is not a supported image") from exc
+
+    def _serialize_crop_profile(self, crop_profile: dict | None):
+        if not crop_profile:
+            return None
+        return {
+            "x": float(crop_profile["crop_x"]),
+            "y": float(crop_profile["crop_y"]),
+            "width": float(crop_profile["crop_width"]),
+            "height": float(crop_profile["crop_height"]),
+            "updated_at": crop_profile["updated_at"],
+        }
+
+    def _normalize_crop_profile(self, asset: dict, crop_profile: dict):
+        required = {"x", "y", "width", "height"}
+        missing = required - set(crop_profile.keys())
+        if missing:
+            missing_fields = ", ".join(sorted(missing))
+            raise ValueError(f"Crop profile is missing fields: {missing_fields}")
+
+        try:
+            x = float(crop_profile["x"])
+            y = float(crop_profile["y"])
+            width = float(crop_profile["width"])
+            height = float(crop_profile["height"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Crop profile values must be numeric") from exc
+
+        if width <= 0 or height <= 0:
+            raise ValueError("Crop width and height must be positive")
+        if x < 0 or y < 0:
+            raise ValueError("Crop origin must be within the image bounds")
+        if x + width > 1.0 + 1e-6 or y + height > 1.0 + 1e-6:
+            raise ValueError("Crop profile must stay within the image bounds")
+
+        min_crop_size = 0.05
+        if width < min_crop_size or height < min_crop_size:
+            raise ValueError("Crop area is too small")
+
+        target_width, target_height = self.device_settings_service.get_resolution()
+        orientation = self.device_settings_service.get_setting("orientation", "horizontal")
+        if orientation == "vertical":
+            target_width, target_height = target_height, target_width
+        target_aspect = target_width / target_height
+        image_width = float(asset["width"])
+        image_height = float(asset["height"])
+        crop_aspect = (width * image_width) / (height * image_height)
+        if not math.isclose(crop_aspect, target_aspect, rel_tol=0.02, abs_tol=0.02):
+            raise ValueError("Crop profile must match the device aspect ratio")
+
+        return {
+            "x": x,
+            "y": y,
+            "width": width,
+            "height": height,
+        }

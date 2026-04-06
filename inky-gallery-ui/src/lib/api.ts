@@ -1,5 +1,6 @@
 import type {
   Asset,
+  CropProfile,
   DeviceSettings,
   DisplayStatus,
   PlaybackPayload,
@@ -104,6 +105,19 @@ export function updateAsset(assetId: string, updates: Partial<Pick<Asset, 'favor
   return apiRequest<Asset>(`/api/assets/${assetId}`, {
     method: 'PATCH',
     body: JSON.stringify(updates),
+  });
+}
+
+export function updateAssetCrop(assetId: string, cropProfile: CropProfile) {
+  return apiRequest<{ crop_profile: CropProfile; asset: Asset }>(`/api/assets/${assetId}/crop`, {
+    method: 'PUT',
+    body: JSON.stringify(cropProfile),
+  });
+}
+
+export function deleteAssetCrop(assetId: string) {
+  return apiRequest<{ success: true; deleted: boolean; asset: Asset }>(`/api/assets/${assetId}/crop`, {
+    method: 'DELETE',
   });
 }
 

@@ -117,7 +117,7 @@ def create_app():
 
     display_manager = DisplayManager(device_settings_service, media_store.current_image_path)
     display_service = DisplayService(media_store, assets_repo, device_settings_service, display_manager)
-    asset_service = AssetService(assets_repo, queue_repo, media_store)
+    asset_service = AssetService(assets_repo, queue_repo, media_store, device_settings_service)
     queue_service = QueueService(queue_repo, assets_repo)
     playback_controller = PlaybackController(playback_repo, queue_repo, display_service, queue_service=queue_service)
 

@@ -1,3 +1,11 @@
+export interface CropProfile {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  updated_at?: string;
+}
+
 export interface Asset {
   id: string;
   filename_original: string;
@@ -12,6 +20,7 @@ export interface Asset {
   thumbnail_url: string | null;
   thumbnail_url_md?: string | null;
   original_url: string;
+  crop_profile: CropProfile | null;
 }
 
 export interface QueueItem {

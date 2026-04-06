@@ -15,13 +15,13 @@ import {
 import {
   Monitor,
   RotateCcw,
+  RotateCw,
   Sun,
   Contrast,
   Sparkles,
   Palette,
   Droplets,
   Save,
-  RotateCw,
   Clock,
   Globe,
   Activity,
@@ -200,21 +200,12 @@ export default function Settings({
             {/* Orientation */}
             <div className="flex items-center justify-between">
               <Label className="text-sm flex items-center gap-2">
-                <RotateCw className="w-3.5 h-3.5 text-muted-foreground" />
+                <Monitor className="w-3.5 h-3.5 text-muted-foreground" />
                 Orientation
               </Label>
-              <Select
-                value={localDevice.orientation}
-                onValueChange={(v: string) => updateDevice({ orientation: v as 'horizontal' | 'vertical' })}
-              >
-                <SelectTrigger className="h-8 w-32 text-sm rounded-lg" id="select-orientation">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="horizontal">Horizontal</SelectItem>
-                  <SelectItem value="vertical">Vertical</SelectItem>
-                </SelectContent>
-              </Select>
+              <Badge variant="secondary" className="text-xs">
+                Portrait only
+              </Badge>
             </div>
 
             {/* Invert */}
