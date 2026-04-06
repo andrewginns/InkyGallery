@@ -119,7 +119,7 @@ def create_app():
     display_service = DisplayService(media_store, assets_repo, device_settings_service, display_manager)
     asset_service = AssetService(assets_repo, queue_repo, media_store)
     queue_service = QueueService(queue_repo, assets_repo)
-    playback_controller = PlaybackController(playback_repo, queue_repo, display_service)
+    playback_controller = PlaybackController(playback_repo, queue_repo, display_service, queue_service=queue_service)
 
     app.register_blueprint(create_assets_blueprint(asset_service, playback_controller))
     app.register_blueprint(create_queue_blueprint(queue_service, playback_controller))

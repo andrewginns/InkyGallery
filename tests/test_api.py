@@ -139,6 +139,55 @@ def test_queue_and_playback_flow(client, sample_png_bytes):
     assert display_status.json["mode"] == "displaying"
 
 
+def test_apply_now_injects_after_live_item_and_continues_queue(client, sample_png_bytes):
+    first = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(sample_png_bytes), "one.png")},
+        content_type="multipart/form-data",
+    )
+    second = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(make_png_bytes((90, 80, 70))), "two.png")},
+        content_type="multipart/form-data",
+    )
+    injected = client.post(
+        "/api/assets",
+        data={"files[]": (io.BytesIO(make_png_bytes((30, 140, 200))), "injected.png")},
+        content_type="multipart/form-data",
+    )
+
+    asset_ids = [
+        first.json["created"][0]["id"],
+        second.json["created"][0]["id"],
+    ]
+    injected_asset_id = injected.json["created"][0]["id"]
+
+    queue_add = client.post("/api/queue/items", json={"asset_ids": asset_ids})
+    queue_ids = [item["id"] for item in queue_add.json["items"]]
+
+    preview_live = client.post("/api/playback/preview", json={"queue_item_id": queue_ids[0]})
+    assert preview_live.status_code == 200
+    applied = client.post("/api/playback/apply")
+    assert applied.status_code == 200
+    assert applied.json["active_queue_item_id"] == queue_ids[0]
+
+    apply_now = client.post("/api/queue/apply-now", json={"asset_id": injected_asset_id})
+    assert apply_now.status_code == 201, apply_now.json
+    injected_queue_item_id = apply_now.json["queue_item"]["id"]
+    assert apply_now.json["state"]["active_queue_item_id"] == injected_queue_item_id
+    assert apply_now.json["state"]["active_asset_id"] == injected_asset_id
+
+    queue = client.get("/api/queue")
+    assert queue.status_code == 200
+    ordered_asset_ids = [item["asset"]["id"] for item in queue.json["items"]]
+    assert ordered_asset_ids == [asset_ids[0], injected_asset_id, asset_ids[1]]
+    assert [item["position"] for item in queue.json["items"]] == [0, 1, 2]
+
+    next_item = client.post("/api/playback/next")
+    assert next_item.status_code == 200, next_item.json
+    assert next_item.json["active_asset_id"] == asset_ids[1]
+
+
 def test_device_settings_patch(client):
     response = client.patch(
         "/api/device/settings",

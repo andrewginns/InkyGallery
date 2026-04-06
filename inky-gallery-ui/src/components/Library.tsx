@@ -27,7 +27,6 @@ import {
   Upload,
   Heart,
   Star,
-  Eye,
   ListPlus,
   MoreHorizontal,
   Trash2,
@@ -40,12 +39,13 @@ import {
   ArrowUpDown,
   Clock,
   FileText,
+  Send,
 } from 'lucide-react';
 import type { Asset } from '@/data/types';
 
 interface LibraryProps {
   assets: Asset[];
-  onPreview: (assetId: string) => void;
+  onApplyNow: (assetId: string) => void;
   onAddToQueue: (assetIds: string[]) => void;
   onUpload: (
     files: File[],
@@ -70,7 +70,7 @@ function formatDate(iso: string): string {
 
 export default function Library({
   assets,
-  onPreview,
+  onApplyNow,
   onAddToQueue,
   onUpload,
   onToggleFavorite,
@@ -453,19 +453,20 @@ export default function Library({
                 {/* Actions */}
                 <div className="flex gap-2">
                   <Button
-                    variant="secondary"
                     size="sm"
                     className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
                     onClick={() => {
-                      onPreview(detailAsset.id);
+                      onApplyNow(detailAsset.id);
                       setDetailAsset(null);
                     }}
-                    id="detail-preview"
+                    id="detail-apply-now"
+                    disabled={busy}
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    Preview
+                    <Send className="w-3.5 h-3.5" />
+                    Apply Now
                   </Button>
                   <Button
+                    variant="secondary"
                     size="sm"
                     className="flex-1 h-9 text-xs gap-1.5 rounded-lg"
                     onClick={() => {
@@ -473,6 +474,7 @@ export default function Library({
                       setDetailAsset(null);
                     }}
                     id="detail-add-queue"
+                    disabled={busy}
                   >
                     <ListPlus className="w-3.5 h-3.5" />
                     Add to Queue

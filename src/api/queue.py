@@ -68,4 +68,21 @@ def create_queue_blueprint(queue_service, playback_controller):
         playback_controller.wake_event.set()
         return jsonify(result)
 
+    @blueprint.post("/api/queue/apply-now")
+    def apply_now():
+        data = request.get_json(force=True, silent=True) or {}
+        asset_id = data.get("asset_id")
+        if not asset_id or not isinstance(asset_id, str):
+            return jsonify({"error": "asset_id must be provided"}), 400
+        try:
+            result = playback_controller.apply_asset_now(
+                asset_id=asset_id,
+                initial_settings=data.get("initial_settings"),
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
+        return jsonify(result), 201
+
     return blueprint

@@ -10,10 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class PlaybackController:
-    def __init__(self, playback_repo, queue_repo, display_service):
+    def __init__(self, playback_repo, queue_repo, display_service, queue_service=None):
         self.playback_repo = playback_repo
         self.queue_repo = queue_repo
         self.display_service = display_service
+        self.queue_service = queue_service
         self.lock = threading.RLock()
         self.wake_event = threading.Event()
         self.stop_event = threading.Event()
@@ -120,6 +121,50 @@ class PlaybackController:
             )
             self.wake_event.set()
             return applied
+
+    def apply_asset_now(self, asset_id: str, initial_settings: dict | None = None):
+        if self.queue_service is None:
+            raise RuntimeError("Queue service is required for apply-now operations")
+
+        with self.lock:
+            state = self.playback_repo.get_state()
+            active_queue_item = None
+            if state.get("active_queue_item_id"):
+                active_queue_item = self.queue_repo.get_item(state["active_queue_item_id"])
+
+            insert_position = active_queue_item["position"] + 1 if active_queue_item else 0
+            queue_item = self.queue_service.insert_asset(
+                asset_id,
+                position=insert_position,
+                initial_settings=initial_settings,
+            )
+            render_result = self.display_service.render_asset(
+                asset_id,
+                fit_mode=queue_item.get("fit_mode", "cover"),
+                background_mode=queue_item.get("background_mode", "blur"),
+                background_color=queue_item.get("background_color"),
+            )
+            timeout_seconds = self._resolve_timeout(queue_item["id"])
+            now = datetime.now(timezone.utc)
+            updated_state = self.playback_repo.update_state(
+                {
+                    "active_queue_item_id": queue_item["id"],
+                    "active_asset_id": asset_id,
+                    "preview_queue_item_id": None,
+                    "preview_asset_id": None,
+                    "mode": "displaying",
+                    "display_started_at": now.isoformat(),
+                    "display_expires_at": self._future_iso(now, timeout_seconds),
+                    "last_image_hash": render_result["image_hash"],
+                    "last_rendered_at": utcnow_iso(),
+                    "updated_at": utcnow_iso(),
+                }
+            )
+            self.wake_event.set()
+            return {
+                "queue_item": queue_item,
+                "state": updated_state,
+            }
 
     def next(self):
         return self._commit_direction("next")

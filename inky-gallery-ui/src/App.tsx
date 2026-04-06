@@ -13,6 +13,7 @@ import QueueView from '@/components/QueueView';
 import SettingsView from '@/components/SettingsView';
 import {
   addQueueItems,
+  applyAssetNow,
   ApiError,
   applyPreview,
   bulkDeleteAssets,
@@ -201,13 +202,6 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [loading]);
 
-  const handlePreviewAsset = (assetId: string) =>
-    withAction('Updating preview…', async () => {
-      setActiveTab('now-playing');
-      await previewPlayback({ asset_id: assetId });
-      await refreshPlaybackAndDisplay();
-    });
-
   const handlePreviewQueueItem = (queueItemId: string) =>
     withAction('Updating preview…', async () => {
       setActiveTab('now-playing');
@@ -215,16 +209,18 @@ export default function App() {
       await refreshPlaybackAndDisplay();
     });
 
-  const handlePreviewDirection = (direction: 'next' | 'previous') =>
-    withAction('Updating preview…', async () => {
-      await previewPlayback({ direction });
-      await refreshPlaybackAndDisplay();
-    });
-
   const handleAddToQueue = (assetIds: string[]) =>
     withAction('Updating queue…', async () => {
       await addQueueItems(assetIds);
       setQueue(await getQueue());
+    });
+
+  const handleApplyAssetNow = (assetId: string) =>
+    withAction('Rendering to device…', async () => {
+      setActiveTab('now-playing');
+      await applyAssetNow(assetId);
+      setQueue(await getQueue());
+      await refreshPlaybackAndDisplay();
     });
 
   const handleUpload = (files: File[], options: { duplicatePolicy: 'reject' | 'reuse_existing' | 'keep_both'; autoAddToQueue: boolean }) =>
@@ -411,14 +407,14 @@ export default function App() {
                 onPause={handlePause}
                 onResume={handleResume}
                 onApply={handleApply}
-                onPreviewDirection={handlePreviewDirection}
+                onPreviewQueueItem={handlePreviewQueueItem}
                 isRendering={isRenderingToDevice}
               />
             )}
             {activeTab === 'library' && (
               <Library
                 assets={assets}
-                onPreview={handlePreviewAsset}
+                onApplyNow={handleApplyAssetNow}
                 onAddToQueue={handleAddToQueue}
                 onUpload={handleUpload}
                 onToggleFavorite={handleToggleFavorite}

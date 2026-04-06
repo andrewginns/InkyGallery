@@ -2,19 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Eye,
-  Pause,
-  Play,
-  Repeat,
-  Send,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-} from 'lucide-react';
+import { Clock, Eye, Pause, Play, Repeat, Send, Shuffle } from 'lucide-react';
 import type { Asset, PlaybackSettings, PlaybackState, QueueItem } from '@/data/types';
 
 interface NowPlayingProps {
@@ -26,7 +14,7 @@ interface NowPlayingProps {
   onPause: () => void;
   onResume: () => void;
   onApply: () => void;
-  onPreviewDirection: (direction: 'next' | 'previous') => void;
+  onPreviewQueueItem: (queueItemId: string) => void;
 }
 
 function formatTimeAgo(iso: string | null): string {
@@ -55,7 +43,7 @@ export default function NowPlaying({
   onPause,
   onResume,
   onApply,
-  onPreviewDirection,
+  onPreviewQueueItem,
 }: NowPlayingProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
@@ -66,6 +54,7 @@ export default function NowPlaying({
   const activeAsset = assets.find((asset) => asset.id === playbackState.active_asset_id) || null;
   const previewAsset = assets.find((asset) => asset.id === playbackState.preview_asset_id) || null;
   const activeQueueItem = queue.find((item) => item.id === playbackState.active_queue_item_id) || null;
+  const previewQueueItem = queue.find((item) => item.id === playbackState.preview_queue_item_id) || null;
 
   const displayedAsset = previewAsset || activeAsset;
   const displayedUrl =
@@ -74,6 +63,7 @@ export default function NowPlaying({
     playbackState.current_image_url ||
     playbackState.last_rendered_url;
   const liveQueueItem = activeQueueItem;
+  const selectedQueueItem = previewQueueItem || liveQueueItem;
 
   const isPreview = playbackState.mode === 'preview';
   const isPaused = playbackState.mode === 'paused';
@@ -274,29 +264,89 @@ export default function NowPlaying({
 
         <Separator className="mb-4" />
 
-        {!isIdle && queue.length > 0 && (
+        {queue.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {isPreview ? 'Live Queue Position' : 'Queue Position'}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {liveQueueItem ? `${liveQueueItem.position + 1} of ${queue.length}` : 'Not in queue'}
-              </span>
+              <div>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Queue Film Strip
+                </span>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selectedQueueItem
+                    ? `${selectedQueueItem.position + 1} of ${queue.length}${
+                        selectedQueueItem.id === liveQueueItem?.id
+                          ? ' · live on device'
+                          : ' · selected for preview'
+                      }`
+                    : 'Tap a queued image to preview it here'}
+                </p>
+              </div>
+              {liveQueueItem && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-2 py-0.5 h-6 gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live-pulse" />
+                  Live {liveQueueItem.position + 1}/{queue.length}
+                </Badge>
+              )}
             </div>
-            <div className="flex gap-1">
-              {queue.map((item) => (
-                <div
-                  key={item.id}
-                  className={`h-1 flex-1 rounded-full transition-colors ${
-                    item.id === liveQueueItem?.id
-                      ? 'bg-primary'
-                      : item.enabled
-                        ? 'bg-muted-foreground/20'
-                        : 'bg-muted-foreground/8'
-                  }`}
-                />
-              ))}
+            <div className="-mx-4 px-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex min-w-max gap-3">
+                {queue.map((item) => {
+                  const isLive = item.id === liveQueueItem?.id;
+                  const isSelected = item.id === selectedQueueItem?.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onPreviewQueueItem(item.id)}
+                      className="flex w-16 flex-col gap-1.5 text-left"
+                      disabled={!item.enabled}
+                    >
+                      <div
+                        className={`relative h-20 w-16 overflow-hidden rounded-xl border transition-all ${
+                          isSelected
+                            ? 'border-primary shadow-md shadow-primary/15'
+                            : 'border-border/60'
+                        } ${isLive ? 'ring-2 ring-emerald-500/60 ring-offset-2 ring-offset-background' : ''} ${
+                          item.enabled ? '' : 'opacity-45'
+                        }`}
+                      >
+                        <img
+                          src={item.asset.thumbnail_url || item.asset.original_url}
+                          alt={item.asset.filename_original}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-1">
+                          <span className="rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                            {item.position + 1}
+                          </span>
+                          {isLive && (
+                            <span className="rounded-full bg-emerald-500/90 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                              Live
+                            </span>
+                          )}
+                        </div>
+                        {isSelected && !isLive && (
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-primary/90 to-transparent px-2 py-2">
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-primary-foreground">
+                              Preview
+                            </span>
+                          </div>
+                        )}
+                        {!item.enabled && (
+                          <div className="absolute inset-0 bg-background/70" />
+                        )}
+                      </div>
+                      <p className="truncate text-[10px] font-medium text-foreground/85">
+                        {item.asset.filename_original}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -336,28 +386,7 @@ export default function NowPlaying({
       </div>
 
       <div className="px-4 pb-3 pt-1">
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 rounded-full"
-            id="btn-previous"
-            onClick={() => onPreviewDirection('previous')}
-            disabled={!hasQueue}
-          >
-            <SkipBack className="w-5 h-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 rounded-full"
-            id="btn-preview-prev"
-            onClick={() => onPreviewDirection('previous')}
-            disabled={!hasQueue}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-
+        <div className="flex items-center justify-center">
           {isIdle ? (
             <Button
               size="icon"
@@ -386,35 +415,12 @@ export default function NowPlaying({
               <Pause className="w-6 h-6" />
             </Button>
           )}
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 rounded-full"
-            id="btn-preview-next"
-            onClick={() => onPreviewDirection('next')}
-            disabled={!hasQueue}
-          >
-            <ChevronRight className="w-5 h-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 rounded-full"
-            id="btn-next"
-            onClick={() => onPreviewDirection('next')}
-            disabled={!hasQueue}
-          >
-            <SkipForward className="w-5 h-5" />
-          </Button>
         </div>
-        <div className="flex items-center justify-center gap-6 mt-1 text-[10px] text-muted-foreground">
-          <span>Previous</span>
-          <span>Preview</span>
-          <span className="w-14" />
-          <span>Preview</span>
-          <span>Next</span>
-        </div>
+        {hasQueue && (
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            Tap a queue thumbnail to preview it here. Use Apply to send the selected image live.
+          </p>
+        )}
       </div>
     </div>
   );

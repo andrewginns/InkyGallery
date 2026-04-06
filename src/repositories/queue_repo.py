@@ -98,6 +98,42 @@ class QueueRepository:
             )
         return self.get_item(item["id"])
 
+    def insert_item_at(self, position: int, item: dict[str, Any]):
+        with self.database.connection() as conn:
+            item_count = conn.execute("SELECT COUNT(*) AS count FROM queue_items").fetchone()["count"]
+            insert_position = max(0, min(int(position), item_count))
+            temp_offset = item_count + 1
+
+            conn.execute(
+                "UPDATE queue_items SET position = position + ? WHERE position >= ?",
+                (temp_offset, insert_position),
+            )
+            conn.execute(
+                """
+                INSERT INTO queue_items (
+                    id, asset_id, position, enabled, timeout_seconds_override,
+                    fit_mode, background_mode, background_color, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item["id"],
+                    item["asset_id"],
+                    insert_position,
+                    int(item.get("enabled", True)),
+                    item.get("timeout_seconds_override"),
+                    item.get("fit_mode", "cover"),
+                    item.get("background_mode", "blur"),
+                    item.get("background_color"),
+                    item["created_at"],
+                    item["updated_at"],
+                ),
+            )
+            conn.execute(
+                "UPDATE queue_items SET position = position - ? WHERE position >= ?",
+                (temp_offset - 1, insert_position + temp_offset),
+            )
+        return self.get_item(item["id"])
+
     def update_item(self, queue_item_id: str, updates: dict[str, Any]):
         if not updates:
             return self.get_item(queue_item_id)

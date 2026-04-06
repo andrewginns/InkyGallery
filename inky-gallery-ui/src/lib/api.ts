@@ -133,6 +133,13 @@ export async function addQueueItems(assetIds: string[]): Promise<QueueItem[]> {
   return data.items;
 }
 
+export function applyAssetNow(assetId: string) {
+  return apiRequest<{ queue_item: QueueItem; state: PlaybackPayload['state'] }>('/api/queue/apply-now', {
+    method: 'POST',
+    body: JSON.stringify({ asset_id: assetId }),
+  });
+}
+
 export function updateQueueItem(queueItemId: string, updates: Partial<QueueItem>) {
   return apiRequest<QueueItem>(`/api/queue/items/${queueItemId}`, {
     method: 'PATCH',

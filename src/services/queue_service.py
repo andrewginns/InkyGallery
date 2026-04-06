@@ -36,6 +36,24 @@ class QueueService:
             created.append(self._serialize_queue_item(created_item))
         return {"items": created}
 
+    def insert_asset(self, asset_id: str, position: int, initial_settings: dict | None = None):
+        if not self.assets_repo.get_asset(asset_id):
+            raise ValueError(f"Asset '{asset_id}' does not exist")
+
+        normalized_settings = self._normalize_queue_updates(initial_settings or {}, partial=False)
+        now = utcnow_iso()
+        created_item = self.queue_repo.insert_item_at(
+            position,
+            {
+                "id": uuid.uuid4().hex,
+                "asset_id": asset_id,
+                **normalized_settings,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        return self._serialize_queue_item(created_item)
+
     def update_item(self, queue_item_id: str, updates: dict):
         normalized = self._normalize_queue_updates(updates, partial=True)
         normalized["updated_at"] = utcnow_iso()
