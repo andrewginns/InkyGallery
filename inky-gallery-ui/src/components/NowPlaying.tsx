@@ -178,7 +178,7 @@ export default function NowPlaying({
       <div className="relative mx-4 mt-3 mb-2 rounded-xl overflow-hidden bg-black/90 shadow-lg shadow-black/20">
         <div
           className={`relative w-full ${isIdle ? '' : 'cursor-zoom-in'}`}
-          style={{ aspectRatio: `${previewAspectRatio}` }}
+          style={{ paddingBottom: '60%' }}
           onClick={() => {
             if (!isIdle) {
               setShowDetail(true);
@@ -198,26 +198,33 @@ export default function NowPlaying({
           ) : (
             <>
               {!imageLoaded && <div className="absolute inset-0 animate-shimmer rounded-xl" />}
-              <img
-                src={displayedUrl || ''}
-                alt={displayedAsset?.filename_original || 'Display'}
-                className={`absolute transition-opacity duration-500 ${
-                  isRendering ? 'animate-rendering-image' : ''
-                } ${displayedCrop ? 'max-w-none select-none' : 'inset-0 w-full h-full object-contain'} ${
-                  imageLoaded ? 'opacity-100' : 'opacity-0'
-                }`}
-                style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
-                onLoad={(event) => {
-                  if (event.currentTarget.currentSrc) {
-                    loadedImageUrlsRef.current.add(event.currentTarget.currentSrc);
-                  }
-                  if (displayedUrl) {
-                    loadedImageUrlsRef.current.add(displayedUrl);
-                  }
-                  setImageLoaded(true);
-                }}
-                onError={() => setImageLoaded(true)}
-              />
+              <div className="absolute inset-0 flex items-center justify-center p-4">
+                <div
+                  className="relative h-full max-w-full overflow-hidden rounded-lg"
+                  style={{ aspectRatio: `${previewAspectRatio}` }}
+                >
+                  <img
+                    src={displayedUrl || ''}
+                    alt={displayedAsset?.filename_original || 'Display'}
+                    className={`absolute transition-opacity duration-500 ${
+                      isRendering ? 'animate-rendering-image' : ''
+                    } ${displayedCrop ? 'max-w-none select-none' : 'inset-0 h-full w-full object-contain'} ${
+                      imageLoaded ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    style={displayedCrop ? cropProfileToImageStyle(displayedCrop) : undefined}
+                    onLoad={(event) => {
+                      if (event.currentTarget.currentSrc) {
+                        loadedImageUrlsRef.current.add(event.currentTarget.currentSrc);
+                      }
+                      if (displayedUrl) {
+                        loadedImageUrlsRef.current.add(displayedUrl);
+                      }
+                      setImageLoaded(true);
+                    }}
+                    onError={() => setImageLoaded(true)}
+                  />
+                </div>
+              </div>
               {isRendering && imageLoaded && (
                 <div className="absolute inset-0 animate-rendering-overlay pointer-events-none">
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent px-3 py-4">
